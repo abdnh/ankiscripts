@@ -7,5 +7,5 @@ setup(
     author="Abdo",
     author_email="abd.nh25@gmail.com",
     url="https://github.com/abdnh/ankibuild",
-    py_modules=["ankibuild"],
+    py_modules=["ankibuild", "ankirun"],
 )
