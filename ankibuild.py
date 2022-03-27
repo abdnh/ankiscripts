@@ -29,7 +29,7 @@ def write_manifest(buildtype: str) -> None:
             conflicts.append(consts["ankiweb_id"])
     manifest["conflicts"] = conflicts
 
-    open("src/manifest.json", "w", encoding="utf-8").write(json.dumps(manifest))
+    open("src/manifest.json", "w", encoding="utf-8").write(json.dumps(manifest, ensure_ascii=False))
 
 
 def write_consts() -> None:
