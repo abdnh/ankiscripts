@@ -80,12 +80,17 @@ def get_package_name(buildtype: str, qt_version: Optional[str]) -> str:
     return name
 
 
-def dump_build_script(dump: bool) -> None:
+def dump_scripts(dump: bool) -> None:
     if not dump:
         return
 
     src_file = Path(__file__)
     dest_file = Path("./build.py").resolve()
+    if src_file != dest_file:
+        dest_file.write_text(src_file.read_text(), encoding="utf-8")
+
+    src_file = Path(os.path.join(os.path.dirname(__file__), "ankirun.py"))
+    dest_file = Path("./ankirun.py").resolve()
     if src_file != dest_file:
         dest_file.write_text(src_file.read_text(), encoding="utf-8")
 
@@ -137,7 +142,7 @@ parser.add_argument(
 parser.add_argument(
     "--dump",
     action="store_true",
-    help="dump this build script to the current directory for stand-alone source distributions",
+    help="dump this build script and the run script to the current directory for stand-alone source distributions",
 )
 parser.add_argument(
     "--install",
@@ -151,7 +156,7 @@ buildtype = args.type
 qt_version = args.qt
 dump = args.dump
 
-dump_build_script(dump)
+dump_scripts(dump)
 consts = read_addon_json()
 name = get_package_name(buildtype, qt_version)
 if args.install:
