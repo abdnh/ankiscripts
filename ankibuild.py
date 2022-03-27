@@ -171,7 +171,10 @@ to_remove = {
 }
 for path in to_remove:
     if os.path.exists(path):
-        os.remove(path)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
 
 write_manifest(buildtype)
 generate_forms(qt_version)
