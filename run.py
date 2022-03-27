@@ -2,7 +2,7 @@ import subprocess
 import os
 
 env = os.environ.copy()
-# Run debugger on uncaughted exceptions (https://addon-docs.ankiweb.net/debugging.html#pdb)
+# Run debugger on uncaught exceptions (https://addon-docs.ankiweb.net/debugging.html#pdb)
 env["DEBUG"] = "1"
 # For debugging webviews (https://addon-docs.ankiweb.net/debugging.html#webviews)
 env["QTWEBENGINE_REMOTE_DEBUGGING"] = "8080"
