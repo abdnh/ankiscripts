@@ -1,0 +1,4 @@
+anki
+aqt
+mypy>=0.942,<1.0
+black==22.1.0

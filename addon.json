@@ -1,0 +1,7 @@
+{
+    "name": "Test Add-on",
+    "package": "test_addon",
+    "homepage": "https://example.com/",
+    "ankiweb_id": "1",
+    "version": "0.0.1"
+}
