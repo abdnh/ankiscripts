@@ -3,16 +3,17 @@ import os
 from pathlib import Path
 import argparse
 from typing import Optional, Any, Dict
-import zipfile
 import json
 import io
+import subprocess
+import shutil
 
 
 def read_addon_json() -> Dict[str, Any]:
     return json.load(open("addon.json"))
 
 
-def write_manifest(addon_zip: zipfile.ZipFile, buildtype: str) -> None:
+def write_manifest(buildtype: str) -> None:
     manifest = {
         "name": consts["name"],
     }
@@ -28,17 +29,17 @@ def write_manifest(addon_zip: zipfile.ZipFile, buildtype: str) -> None:
             conflicts.append(consts["ankiweb_id"])
     manifest["conflicts"] = conflicts
 
-    addon_zip.writestr("manifest.json", json.dumps(manifest))
+    open("src/manifest.json", "w", encoding="utf-8").write(json.dumps(manifest))
 
 
-def write_consts(addon_zip: zipfile.ZipFile) -> None:
+def write_consts() -> None:
     s = ""
     for name, val in consts.items():
         s += f"{name.upper()} = {repr(val)}\n"
-    addon_zip.writestr("consts.py", s)
+    open("src/consts.py", "w", encoding="utf-8").write(s)
 
 
-def generate_forms(addon_zip: zipfile.ZipFile, qt_version: Optional[str]) -> None:
+def generate_forms(qt_version: Optional[str]) -> None:
     if not qt_version:
         return
     forms = Path("./designer").glob("*.ui")
@@ -50,7 +51,9 @@ def generate_forms(addon_zip: zipfile.ZipFile, qt_version: Optional[str]) -> Non
         for form in forms:
             buf = io.StringIO()
             compileUi(open(form), buf)
-            addon_zip.writestr(form.stem + ".py", buf.getvalue())
+            name = form.stem + ".py"
+            value = buf.getvalue()
+            open(f"src/{name}", "w", encoding="utf-8").write(value)
     else:
         from PyQt5.uic import compileUi as compileUi5
         from PyQt6.uic import compileUi as compileUi6
@@ -60,7 +63,9 @@ def generate_forms(addon_zip: zipfile.ZipFile, qt_version: Optional[str]) -> Non
             for suffix, func in funcs.items():
                 buf = io.StringIO()
                 func(open(form), buf)
-                addon_zip.writestr(form.stem + f"_{suffix}.py", buf.getvalue())
+                name = form.stem + f"_{suffix}.py"
+                value = buf.getvalue()
+                open(f"src/{name}", "w", encoding="utf-8").write(value)
 
 
 def get_package_name(buildtype: str, qt_version: Optional[str]) -> str:
@@ -149,20 +154,37 @@ dump = args.dump
 dump_build_script(dump)
 consts = read_addon_json()
 name = get_package_name(buildtype, qt_version)
+if args.install:
+    shutil.copytree(
+        "src", f'ankiprofile/addons21/{consts["package"]}', dirs_exist_ok=True
+    )
+
 if not needs_build(args, name):
     sys.exit(0)
 
-excluded = {"__pycache__"}
+to_remove = {
+    "src/__pycache__",
+    "src/*_qt5.py",
+    "src/*_qt6.py",
+    "src/*_all.py",
+    "src/consts.py",
+}
+for path in to_remove:
+    if os.path.exists(path):
+        os.remove(path)
 
-with zipfile.ZipFile(name, mode="w") as addon_zip:
-    src_path = Path("./src")
-    for file in src_path.glob("**/*"):
-        if file.name in excluded or file.parent.name in excluded:
-            continue
-        addon_zip.write(file, arcname=file.relative_to(src_path))
-    write_manifest(addon_zip, buildtype)
-    generate_forms(addon_zip, qt_version)
-    write_consts(addon_zip)
-    if args.install:
-        addon_zip.extractall(f'ankiprofile/addons21/{consts["package"]}')
-    addon_zip.close()
+write_manifest(buildtype)
+generate_forms(qt_version)
+write_consts()
+
+subprocess.check_call(
+    [
+        "7z",
+        "a",
+        "-tzip",
+        "-bso0",
+        name,
+        "-w",
+        "src/.",
+    ]
+)
