@@ -183,8 +183,10 @@ to_remove = {
     "src/*_qt5.py",
     "src/*_qt6.py",
     "src/*_all.py",
-    "src/consts.py",
 }
+if not args.noconsts:
+    to_remove.add("src/consts.py")
+
 for path in to_remove:
     if os.path.exists(path):
         if os.path.isdir(path):
