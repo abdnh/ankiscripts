@@ -8,8 +8,8 @@ setup(
     author_email="abd.nh25@gmail.com",
     url="https://github.com/abdnh/ankibuild",
     py_modules=["ankibuild", "ankirun"],
-    install_requires=[
-        "pyqt6",
-        "pyqt5",
-    ],
+    extras_require={
+        "qt5": ["pyqt5"],
+        "qt6": ["pyqt6"],
+    },
 )
