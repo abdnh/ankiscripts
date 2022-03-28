@@ -36,7 +36,9 @@ def write_manifest(buildtype: str) -> None:
     )
 
 
-def write_consts() -> None:
+def write_consts(noconsts: bool) -> None:
+    if noconsts:
+        return
     s = ""
     for name, val in consts.items():
         s += f"{name.upper()} = {repr(val)}\n"
@@ -153,6 +155,11 @@ parser.add_argument(
     action="store_true",
     help="install in an Anki base folder assumed to be located at `ankiprofile` in the current directory",
 )
+parser.add_argument(
+    "--noconsts",
+    action="store_true",
+    help="do not generate src/consts.py from addon.json",
+)
 
 
 args = parser.parse_args()
@@ -187,7 +194,7 @@ for path in to_remove:
 
 write_manifest(buildtype)
 generate_forms(qt_version)
-write_consts()
+write_consts(args.noconsts)
 
 subprocess.check_call(
     [
