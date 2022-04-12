@@ -8,4 +8,4 @@ env["DEBUG"] = "1"
 env["QTWEBENGINE_REMOTE_DEBUGGING"] = "8080"
 # TODO: more vars to define? see dev docs
 
-subprocess.check_call(["anki-console", "-b", "ankiprofile"], env=env)
+subprocess.check_call(["anki", "-b", "ankiprofile"], env=env)
