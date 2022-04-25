@@ -2,6 +2,7 @@ import sys
 import os
 from pathlib import Path
 import argparse
+from time import time
 from typing import Optional, Any, Dict
 import json
 import io
@@ -106,6 +107,17 @@ def most_recent_change(args: argparse.Namespace):
     paths = ["src", "addon.json"]
     if args.qt:
         paths.append("designer")
+        for ui in Path("designer").glob("*.ui"):
+            form_file = ui.with_suffix(".py")
+            form_files = []
+            if args.qt in ("qt5", "all"):
+                form_files.append(form_file.with_stem(f"{form_file.stem}_qt5"))
+            if args.qt in ("qt6", "all"):
+                form_files.append(form_file.with_stem(f"{form_file.stem}_qt6"))
+            for file in form_files:
+                if not file.exists():
+                    newest = time()
+                    break
     for path in paths:
         if os.path.isfile(path):
             newest = max(newest, os.stat(path).st_mtime)
