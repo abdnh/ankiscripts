@@ -131,6 +131,13 @@ def last_build_time(name):
         return 0
 
 
+def install(args: argparse.Namespace):
+    if args.install:
+        shutil.copytree(
+            "src", f'ankiprofile/addons21/{consts["package"]}', dirs_exist_ok=True
+        )
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -163,24 +170,22 @@ parser.add_argument(
 parser.add_argument(
     "--forms-dir",
     help="generate forms in the specified path (relative to src)",
+    default="",
 )
 
 args = parser.parse_args()
 buildtype = args.type
 qt_version = args.qt
 dump = args.dump
-forms_dir = Path(f"./src/{args.forms_dir}") if args.forms_dir else Path("./src")
+forms_dir = Path(f"./src/{args.forms_dir}")
 forms_dir.mkdir(exist_ok=True)
 
 dump_scripts(dump)
 consts = read_addon_json()
 name = get_package_name(buildtype, qt_version)
-if args.install:
-    shutil.copytree(
-        "src", f'ankiprofile/addons21/{consts["package"]}', dirs_exist_ok=True
-    )
 
 if not needs_build(args, name):
+    install(args)
     sys.exit(0)
 
 to_remove = {"src/__pycache__"}
@@ -197,6 +202,7 @@ for path in to_remove:
 write_manifest(buildtype)
 generate_forms(qt_version, forms_dir)
 write_consts(args.noconsts)
+install(args)
 
 subprocess.check_call(
     [
