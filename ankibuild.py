@@ -45,7 +45,7 @@ def write_consts(noconsts: bool) -> None:
     open("src/consts.py", "w", encoding="utf-8").write(s)
 
 
-def generate_forms(qt_version: Optional[str]) -> None:
+def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
     if not qt_version:
         return
     forms = Path("./designer").glob("*.ui")
@@ -59,7 +59,7 @@ def generate_forms(qt_version: Optional[str]) -> None:
             compileUi(open(form), buf)
             name = form.stem + ".py"
             value = buf.getvalue()
-            open(f"src/{name}", "w", encoding="utf-8").write(value)
+            open(forms_dir / name, "w", encoding="utf-8").write(value)
     else:
         from PyQt5.uic import compileUi as compileUi5
         from PyQt6.uic import compileUi as compileUi6
@@ -71,7 +71,7 @@ def generate_forms(qt_version: Optional[str]) -> None:
                 func(open(form), buf)
                 name = form.stem + f"_{suffix}.py"
                 value = buf.getvalue()
-                open(f"src/{name}", "w", encoding="utf-8").write(value)
+                open(forms_dir / name, "w", encoding="utf-8").write(value)
 
 
 def get_package_name(buildtype: str, qt_version: Optional[str]) -> str:
@@ -160,12 +160,17 @@ parser.add_argument(
     action="store_true",
     help="do not generate src/consts.py from addon.json",
 )
-
+parser.add_argument(
+    "--forms-dir",
+    help="generate forms in the specified path (relative to src)",
+)
 
 args = parser.parse_args()
 buildtype = args.type
 qt_version = args.qt
 dump = args.dump
+forms_dir = Path(f"./src/{args.forms_dir}") if args.forms_dir else Path("./src")
+forms_dir.mkdir(exist_ok=True)
 
 dump_scripts(dump)
 consts = read_addon_json()
@@ -178,12 +183,7 @@ if args.install:
 if not needs_build(args, name):
     sys.exit(0)
 
-to_remove = {
-    "src/__pycache__",
-    "src/*_qt5.py",
-    "src/*_qt6.py",
-    "src/*_all.py",
-}
+to_remove = {"src/__pycache__"}
 if not args.noconsts:
     to_remove.add("src/consts.py")
 
@@ -195,7 +195,7 @@ for path in to_remove:
             os.remove(path)
 
 write_manifest(buildtype)
-generate_forms(qt_version)
+generate_forms(qt_version, forms_dir)
 write_consts(args.noconsts)
 
 subprocess.check_call(
