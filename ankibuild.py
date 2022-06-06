@@ -200,13 +200,10 @@ if not needs_build(args, name):
     install(args)
     sys.exit(0)
 
-to_remove = {"src/__pycache__"}
-if not args.noconsts:
-    to_remove.add("src/consts.py")
-
-for path in to_remove:
-    if os.path.exists(path):
-        if os.path.isdir(path):
+to_remove = {"**/__pycache__"}
+for pattern in to_remove:
+    for path in Path("./src").glob(pattern):
+        if path.is_dir():
             shutil.rmtree(path)
         else:
             os.remove(path)
