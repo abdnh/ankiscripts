@@ -9,6 +9,8 @@ import io
 import subprocess
 import shutil
 
+import jsonschema
+
 
 def read_addon_json() -> Dict[str, Any]:
     return json.load(open("addon.json"))
@@ -143,6 +145,16 @@ def last_build_time(name):
         return 0
 
 
+def validate_config(args: argparse.Namespace) -> None:
+    instance_path = Path("src/config.json")
+    schema_path = Path("src/config.schema.json")
+    if not instance_path.exists() or not schema_path.exists():
+        return
+    instance = json.loads(instance_path.read_text(encoding="utf-8"))
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    jsonschema.validate(instance=instance, schema=schema)
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -172,8 +184,14 @@ parser.add_argument(
     help="generate forms in the specified path (relative to src)",
     default="",
 )
+parser.add_argument(
+    "--validate_schema",
+    help="Validate config.json according to config.schema.json (if both exist)",
+    action="store_false",
+)
 
 args = parser.parse_args()
+validate_config(args)
 buildtype = args.type
 qt_version = args.qt
 dump = args.dump
