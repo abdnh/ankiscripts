@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name="ankibuild",
-    version="0.0.1",
+    version="0.1.0",
     description="Simple script to build Anki add-ons",
     author="Abdo",
     author_email="abd.nh25@gmail.com",
