@@ -182,7 +182,7 @@ parser.add_argument(
 parser.add_argument(
     "--forms-dir",
     help="generate forms in the specified path (relative to src)",
-    default="",
+    default="forms",
 )
 parser.add_argument(
     "--validate_schema",
