@@ -1,23 +1,19 @@
-.PHONY: all build format checkformat typecheck lint check run clean
+.PHONY: all build fix mypy pylint run clean
 
 all: build
 
 build:
-	python -m ankibuild --qt all --install
+	python -m ankibuild --qt all
 
-format:
-	python -m black src
+fix:
+	python -m black src --exclude="forms|vendor"
+	python -m isort src
 
-checkformat:
-	python -m black --diff --color src
+mypy:
+	python -m mypy .
 
-typecheck:
-	python -m mypy src
-
-lint:
-	python -m pylint src
-
-check: lint typecheck checkformat
+pylint:
+	python -m pylint src tests
 
 run: build
 	python run.py

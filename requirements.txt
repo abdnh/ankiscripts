@@ -1,7 +1,9 @@
 anki
 aqt
 mypy
+pylint
 black
+isort
 pyqt6
 pyqt6-webengine
 pyqt5
