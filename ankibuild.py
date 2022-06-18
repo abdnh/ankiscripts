@@ -143,13 +143,6 @@ def last_build_time(name):
         return 0
 
 
-def install(args: argparse.Namespace):
-    if args.install:
-        shutil.copytree(
-            "src", f'ankiprofile/addons21/{consts["package"]}', dirs_exist_ok=True
-        )
-
-
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -168,11 +161,6 @@ parser.add_argument(
     "--dump",
     action="store_true",
     help="dump this build script and the run script to the current directory for stand-alone source distributions",
-)
-parser.add_argument(
-    "--install",
-    action="store_true",
-    help="install in an Anki base folder assumed to be located at `ankiprofile` in the current directory",
 )
 parser.add_argument(
     "--noconsts",
@@ -197,7 +185,6 @@ consts = read_addon_json()
 name = get_package_name(buildtype, qt_version)
 
 if not needs_build(args, name):
-    install(args)
     sys.exit(0)
 
 to_remove = {"**/__pycache__"}
@@ -211,7 +198,6 @@ for pattern in to_remove:
 write_manifest(buildtype)
 generate_forms(qt_version, forms_dir)
 write_consts(args.noconsts)
-install(args)
 
 subprocess.check_call(
     [
