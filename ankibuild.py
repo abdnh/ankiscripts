@@ -80,7 +80,7 @@ def get_package_name(buildtype: str, qt_version: Optional[str]) -> str:
     name = f"build/{consts['package']}"
     if buildtype == "ankiweb":
         name += "_ankiweb"
-    if qt_version:
+    if qt_version and qt_version != "all":
         name += f"_{qt_version}"
     name += ".ankiaddon"
 
