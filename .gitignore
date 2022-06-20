@@ -4,3 +4,5 @@ venv/
 ankiprofile/
 build/
 src/forms/
+src/manifest.json
+src/meta.json
