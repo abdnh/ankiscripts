@@ -1,3 +1,7 @@
+"""
+This script runs Anki with the base folder `ankiprofile` in the current directory.
+This is intended for testing the add-on after building and copying src/ to ankiprofile/addons21 or symlinking it.
+"""
 import subprocess
 import os
 
@@ -6,6 +10,8 @@ env = os.environ.copy()
 env["DEBUG"] = "1"
 # For debugging webviews (https://addon-docs.ankiweb.net/debugging.html#webviews)
 env["QTWEBENGINE_REMOTE_DEBUGGING"] = "8080"
-# TODO: more vars to define? see dev docs
-
+# Logging
+env["ANKIDEV"] = "1"
+# Print SQL statements
+# env["TRACESQL"] = "1"
 subprocess.check_call(["anki", "-b", "ankiprofile"], env=env)
