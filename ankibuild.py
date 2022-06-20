@@ -99,7 +99,7 @@ def dump_scripts(dump: bool) -> None:
         dest_file.write_text(src_file.read_text(), encoding="utf-8")
 
     src_file = Path(os.path.join(os.path.dirname(__file__), "ankirun.py"))
-    dest_file = Path("./ankirun.py").resolve()
+    dest_file = Path("./run.py").resolve()
     if src_file != dest_file:
         dest_file.write_text(src_file.read_text(), encoding="utf-8")
 
