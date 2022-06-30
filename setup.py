@@ -13,6 +13,9 @@ setup(
         "Operating System :: OS Independent",
     ],
     py_modules=["ankibuild", "ankirun"],
+    install_requires = [
+        "jsonschema"
+    ],
     extras_require={
         "qt5": ["pyqt5"],
         "qt6": ["pyqt6"],
