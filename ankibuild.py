@@ -189,6 +189,13 @@ parser.add_argument(
     help="Validate config.json according to config.schema.json (if both exist)",
     action="store_false",
 )
+parser.add_argument(
+    "--exclude",
+    "-e",
+    help="Exclude paths relative to src/ matching given glob from package",
+    action="append",
+    metavar="PATTERN"
+)
 
 args = parser.parse_args()
 validate_config(args)
@@ -217,6 +224,10 @@ write_manifest(buildtype)
 generate_forms(qt_version, forms_dir)
 write_consts(args.noconsts)
 
+excludes = args.exclude if args.exclude else []
+for i, exclude in enumerate(excludes):
+    excludes[i] = f"-xr!{exclude}"
+
 subprocess.check_call(
     [
         "7z",
@@ -226,5 +237,6 @@ subprocess.check_call(
         name,
         "-w",
         "src/.",
+        *excludes,
     ]
 )

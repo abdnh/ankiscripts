@@ -3,7 +3,7 @@
 all: build
 
 build:
-	python -m ankibuild --qt all
+	python -m ankibuild --qt all --exclude user_files/**/
 
 fix:
 	python -m black src --exclude="forms|vendor"
