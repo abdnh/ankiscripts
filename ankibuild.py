@@ -200,11 +200,6 @@ parser.add_argument(
     default="forms",
 )
 parser.add_argument(
-    "--validate_schema",
-    help="Validate config.json according to config.schema.json (if both exist)",
-    action="store_false",
-)
-parser.add_argument(
     "--exclude",
     "-e",
     help="Exclude paths relative to src/ matching given glob from package",
