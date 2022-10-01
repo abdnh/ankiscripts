@@ -105,6 +105,7 @@ def dump_scripts(dump: bool) -> None:
 
 
 def most_recent_change(args: argparse.Namespace):
+    excludes = args.exclude if args.exclude else []
     newest = 0
     paths = ["src", "addon.json"]
     if args.qt:
@@ -124,10 +125,24 @@ def most_recent_change(args: argparse.Namespace):
         if os.path.isfile(path):
             newest = max(newest, os.stat(path).st_mtime)
         else:
-            for dirpath, _, fnames in os.walk(path):
+            for dirpath, dirs, fnames in os.walk(path):
+                if path == "src":
+                    # Apply exclude list
+                    new_dirs = []
+                    for d in dirs:
+                        p = dirpath / Path(d)
+                        if not any(p.match(e) for e in excludes):
+                            new_dirs.append(d)
+                    dirs[:] = new_dirs
+                    new_fnames = []
+                    for f in fnames:
+                        p = Path(f)
+                        if not any(p.match(e) for e in excludes):
+                            new_fnames.append(f)
+                    fnames[:] = new_fnames
                 for fname in fnames:
-                    path = os.path.join(dirpath, fname)
-                    newest = max(newest, os.stat(path).st_mtime)
+                    p = os.path.join(dirpath, fname)
+                    newest = max(newest, os.stat(p).st_mtime)
 
     return newest
 
@@ -194,7 +209,7 @@ parser.add_argument(
     "-e",
     help="Exclude paths relative to src/ matching given glob from package",
     action="append",
-    metavar="PATTERN"
+    metavar="PATTERN",
 )
 
 args = parser.parse_args()
