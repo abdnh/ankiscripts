@@ -125,7 +125,7 @@ def most_recent_change(args: argparse.Namespace):
         if os.path.isfile(path):
             newest = max(newest, os.stat(path).st_mtime)
         else:
-            for dirpath, dirs, fnames in os.walk(path):
+            for dirpath, dirs, fnames in os.walk(path, topdown=True):
                 if path == "src":
                     # Apply exclude list
                     new_dirs = []
