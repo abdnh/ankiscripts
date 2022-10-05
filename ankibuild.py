@@ -237,6 +237,7 @@ write_consts(args.noconsts)
 excludes = args.exclude if args.exclude else []
 for i, exclude in enumerate(excludes):
     excludes[i] = f"-xr!{exclude}"
+excludes.append("-xr!meta.json")
 
 subprocess.check_call(
     [
