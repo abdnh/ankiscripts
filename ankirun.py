@@ -12,6 +12,8 @@ env["DEBUG"] = "1"
 env["QTWEBENGINE_REMOTE_DEBUGGING"] = "8080"
 # Logging
 env["ANKIDEV"] = "1"
+# Disable Qt5 compatibility
+env["DISABLE_QT5_COMPAT"] = "1"
 # Print SQL statements
 # env["TRACESQL"] = "1"
 subprocess.check_call(["anki", "-b", "ankidata"], env=env)
