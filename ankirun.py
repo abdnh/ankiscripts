@@ -1,6 +1,6 @@
 """
-This script runs Anki with the base folder `ankiprofile` in the current directory.
-This is intended for testing the add-on after building and copying src/ to ankiprofile/addons21 or symlinking it.
+This script runs Anki with the base folder `ankidata` in the current directory.
+This is intended for testing the add-on after building and copying src/ to ankidata/addons21 or symlinking it.
 """
 import subprocess
 import os
@@ -14,4 +14,4 @@ env["QTWEBENGINE_REMOTE_DEBUGGING"] = "8080"
 env["ANKIDEV"] = "1"
 # Print SQL statements
 # env["TRACESQL"] = "1"
-subprocess.check_call(["anki", "-b", "ankiprofile"], env=env)
+subprocess.check_call(["anki", "-b", "ankidata"], env=env)

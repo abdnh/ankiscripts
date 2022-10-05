@@ -1,6 +1,6 @@
 [MASTER]
 extension-pkg-whitelist=PyQt6,PyQt5
-ignore-paths = venv|ankiprofile|src/forms|src/vendor
+ignore-paths = venv|ankidata|src/forms|src/vendor
 
 [REPORTS]
 output-format=colorized
