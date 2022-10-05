@@ -17,23 +17,33 @@ def read_addon_json() -> Dict[str, Any]:
 
 
 def write_manifest(buildtype: str, mod: int) -> None:
+    consts_copy = consts.copy()
     manifest = {
-        "name": consts["name"],
+        "name": consts_copy["name"],
     }
-    if consts.get("homepage"):
-        manifest["homepage"] = consts["homepage"]
-    conflicts = consts.get("conflicts", [])
+    if consts_copy.get("homepage"):
+        manifest["homepage"] = consts_copy["homepage"]
+    conflicts = consts_copy.get("conflicts", [])
     if buildtype == "ankiweb":
         # `name` and `package` are not required for AnkiWeb builds, but it doesn't hurt to add them
-        if consts.get("ankiweb_id"):
-            manifest["package"] = consts["ankiweb_id"]
-        conflicts.append(consts["package"])
+        if consts_copy.get("ankiweb_id"):
+            manifest["package"] = consts_copy["ankiweb_id"]
+        conflicts.append(consts_copy["package"])
     else:
-        manifest["package"] = consts["package"]
-        if consts.get("ankiweb_id"):
-            conflicts.append(consts["ankiweb_id"])
+        manifest["package"] = consts_copy["package"]
+        if consts_copy.get("ankiweb_id"):
+            conflicts.append(consts_copy["ankiweb_id"])
     manifest["conflicts"] = conflicts
     manifest["mod"] = mod
+
+    # Remove values we copied so far from consts_copy and add the rest as they are to the manifest
+    copied = ("name", "package", "homepage", "conflicts", "ankiweb_id")
+    for key in copied:
+        consts_copy.pop(key, None)
+
+    for key, value in consts_copy.items():
+        manifest[key] = value
+
     open("src/manifest.json", "w", encoding="utf-8").write(
         json.dumps(manifest, ensure_ascii=False)
     )
