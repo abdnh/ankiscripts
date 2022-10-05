@@ -16,7 +16,7 @@ def read_addon_json() -> Dict[str, Any]:
     return json.load(open("addon.json"))
 
 
-def write_manifest(buildtype: str) -> None:
+def write_manifest(buildtype: str, mod: int) -> None:
     manifest = {
         "name": consts["name"],
     }
@@ -33,7 +33,7 @@ def write_manifest(buildtype: str) -> None:
         if consts.get("ankiweb_id"):
             conflicts.append(consts["ankiweb_id"])
     manifest["conflicts"] = conflicts
-
+    manifest["mod"] = mod
     open("src/manifest.json", "w", encoding="utf-8").write(
         json.dumps(manifest, ensure_ascii=False)
     )
@@ -230,7 +230,7 @@ for pattern in to_remove:
         else:
             os.remove(path)
 
-write_manifest(buildtype)
+write_manifest(buildtype, int(Path("./src").stat().st_mtime))
 generate_forms(qt_version, forms_dir)
 write_consts(args.noconsts)
 
