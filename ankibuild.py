@@ -87,13 +87,15 @@ def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
                 open(forms_dir / name, "w", encoding="utf-8").write(value)
 
 
-def get_package_name(buildtype: str, qt_version: Optional[str]) -> str:
+def get_package_name(args: argparse.Namespace) -> str:
     os.makedirs("build", exist_ok=True)
+    if args.out:
+        return args.out
     name = f"build/{consts['package']}"
-    if buildtype == "ankiweb":
+    if args.type == "ankiweb":
         name += "_ankiweb"
-    if qt_version and qt_version != "all":
-        name += f"_{qt_version}"
+    if args.qt and args.qt != "all":
+        name += f"_{args.qt}"
     name += ".ankiaddon"
 
     return name
@@ -216,6 +218,12 @@ parser.add_argument(
     action="append",
     metavar="PATTERN",
 )
+parser.add_argument(
+    "--out",
+    help="The output filename to use. If not specified, \
+the name will depend on the package name, the build type, and the Qt version",
+    required=False,
+)
 
 args = parser.parse_args()
 validate_config(args)
@@ -227,7 +235,7 @@ forms_dir.mkdir(exist_ok=True)
 
 dump_scripts(dump)
 consts = read_addon_json()
-name = get_package_name(buildtype, qt_version)
+name = get_package_name(args)
 
 if not needs_build(args, name):
     sys.exit(0)
