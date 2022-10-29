@@ -12,8 +12,14 @@ import shutil
 import jsonschema
 
 
-def read_addon_json() -> Dict[str, Any]:
-    return json.load(open("addon.json"))
+def read_addon_json(args: argparse.Namespace) -> Dict[str, Any]:
+    data = json.load(open("addon.json"))
+    cmd_manifest = {}
+    if args.manifest:
+        cmd_manifest = json.loads(args.manifest)
+    for k, v in cmd_manifest.items():
+        data[k] = v
+    return data
 
 
 def write_manifest(buildtype: str, mod: int) -> None:
@@ -224,6 +230,12 @@ parser.add_argument(
 the name will depend on the package name, the build type, and the Qt version",
     required=False,
 )
+parser.add_argument(
+    "--manifest",
+    help="Extra key-value pairs to add to manifest.json, which will override the same values in addon.json",
+    metavar="JSON",
+    required=False,
+)
 
 args = parser.parse_args()
 validate_config(args)
@@ -234,7 +246,7 @@ forms_dir = Path(f"./src/{args.forms_dir}")
 forms_dir.mkdir(exist_ok=True)
 
 dump_scripts(dump)
-consts = read_addon_json()
+consts = read_addon_json(args)
 name = get_package_name(args)
 
 if not needs_build(args, name):
