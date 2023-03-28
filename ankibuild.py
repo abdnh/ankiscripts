@@ -67,7 +67,9 @@ def write_consts(noconsts: bool) -> None:
 def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
     if not qt_version:
         return
-    forms = Path("./designer").glob("*.ui")
+    forms = list(Path("./designer").glob("*.ui"))
+    if forms:
+        forms_dir.mkdir(exist_ok=True)
     if qt_version == "qt5":
         from PyQt5.uic import compileUi
     elif qt_version == "qt6":
@@ -243,7 +245,6 @@ buildtype = args.type
 qt_version = args.qt
 dump = args.dump
 forms_dir = Path(f"./src/{args.forms_dir}")
-forms_dir.mkdir(exist_ok=True)
 
 dump_scripts(dump)
 consts = read_addon_json(args)
