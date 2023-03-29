@@ -1,19 +1,19 @@
-import sys
-import os
-from pathlib import Path
 import argparse
-from time import time
-from typing import Optional, Any, Dict
-import json
 import io
-import subprocess
+import json
+import os
 import shutil
+import subprocess
+import sys
+from pathlib import Path
+from time import time
+from typing import Any, Callable, Dict, Optional
 
 import jsonschema
 
 
 def read_addon_json(args: argparse.Namespace) -> Dict[str, Any]:
-    data = json.load(open("addon.json"))
+    data = json.load(open("addon.json", encoding="utf-8"))
     cmd_manifest = {}
     if args.manifest:
         cmd_manifest = json.loads(args.manifest)
@@ -73,11 +73,11 @@ def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
     if qt_version == "qt5":
         from PyQt5.uic import compileUi
     elif qt_version == "qt6":
-        from PyQt6.uic import compileUi
+        from PyQt6.uic import compileUi  # type: ignore[no-redef]
     if qt_version != "all":
         for form in forms:
             buf = io.StringIO()
-            compileUi(open(form), buf)
+            compileUi(open(form, encoding="utf-8"), buf)
             name = form.stem + ".py"
             value = buf.getvalue()
             open(forms_dir / name, "w", encoding="utf-8").write(value)
@@ -85,11 +85,14 @@ def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
         from PyQt5.uic import compileUi as compileUi5
         from PyQt6.uic import compileUi as compileUi6
 
-        funcs = {"qt5": compileUi5, "qt6": compileUi6}
+        funcs: dict[str, Callable[[Any, Any], None]] = {
+            "qt5": compileUi5,
+            "qt6": compileUi6,
+        }
         for form in forms:
             for suffix, func in funcs.items():
                 buf = io.StringIO()
-                func(open(form), buf)
+                func(open(form, encoding="utf-8"), buf)
                 name = form.stem + f"_{suffix}.py"
                 value = buf.getvalue()
                 open(forms_dir / name, "w", encoding="utf-8").write(value)
@@ -116,17 +119,17 @@ def dump_scripts(dump: bool) -> None:
     src_file = Path(__file__)
     dest_file = Path("./build.py").resolve()
     if src_file != dest_file:
-        dest_file.write_text(src_file.read_text(), encoding="utf-8")
+        dest_file.write_text(src_file.read_text(encoding="utf-8"), encoding="utf-8")
 
     src_file = Path(os.path.join(os.path.dirname(__file__), "ankirun.py"))
     dest_file = Path("./run.py").resolve()
     if src_file != dest_file:
-        dest_file.write_text(src_file.read_text(), encoding="utf-8")
+        dest_file.write_text(src_file.read_text(encoding="utf-8"), encoding="utf-8")
 
 
-def most_recent_change(args: argparse.Namespace):
+def most_recent_change(args: argparse.Namespace) -> float:
     excludes = args.exclude if args.exclude else []
-    newest = 0
+    newest = 0.0
     paths = ["src", "addon.json"]
     if args.qt:
         paths.append("designer")
@@ -161,23 +164,23 @@ def most_recent_change(args: argparse.Namespace):
                             new_fnames.append(f)
                     fnames[:] = new_fnames
                 for fname in fnames:
-                    p = os.path.join(dirpath, fname)
+                    p = Path(dirpath) / fname
                     newest = max(newest, os.stat(p).st_mtime)
 
     return newest
 
 
-def needs_build(args: argparse.Namespace, name: str):
+def needs_build(args: argparse.Namespace, name: str) -> bool:
     build_ts = last_build_time(name)
     mod_ts = most_recent_change(args)
     return mod_ts > build_ts
 
 
-def last_build_time(name):
+def last_build_time(name: str) -> float:
     try:
         return os.stat(name).st_mtime
-    except:
-        return 0
+    except Exception:
+        return 0.0
 
 
 def validate_config(args: argparse.Namespace) -> None:
