@@ -1,8 +1,5 @@
 __pycache__/
 venv/
+.mypy_cache/
 *.egg-info/
-ankidata/
-build/
-src/forms/
-src/manifest.json
-src/meta.json
+TODO.md
