@@ -55,9 +55,7 @@ def write_manifest(buildtype: str, mod: int) -> None:
     )
 
 
-def write_consts(noconsts: bool) -> None:
-    if noconsts:
-        return
+def write_consts() -> None:
     s = ""
     for name, val in consts.items():
         s += f"{name.upper()} = {repr(val)}\n"
@@ -213,9 +211,9 @@ parser.add_argument(
     help="dump this build script and the run script to the current directory for stand-alone source distributions",
 )
 parser.add_argument(
-    "--noconsts",
+    "--consts",
     action="store_true",
-    help="do not generate src/consts.py from addon.json",
+    help="generate src/consts.py from addon.json",
 )
 parser.add_argument(
     "--forms-dir",
@@ -266,7 +264,8 @@ for pattern in to_remove:
 
 write_manifest(buildtype, int(Path("./src").stat().st_mtime))
 generate_forms(qt_version, forms_dir)
-write_consts(args.noconsts)
+if args.consts:
+    write_consts()
 
 excludes = args.exclude if args.exclude else []
 for i, exclude in enumerate(excludes):
