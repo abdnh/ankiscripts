@@ -110,10 +110,7 @@ def get_package_name(args: argparse.Namespace) -> str:
     return name
 
 
-def dump_scripts(dump: bool) -> None:
-    if not dump:
-        return
-
+def dump_scripts() -> None:
     src_file = Path(__file__)
     dest_file = Path("./build.py").resolve()
     if src_file != dest_file:
@@ -244,10 +241,10 @@ args = parser.parse_args()
 validate_config(args)
 buildtype = args.type
 qt_version = args.qt
-dump = args.dump
 forms_dir = Path(f"./src/{args.forms_dir}")
 
-dump_scripts(dump)
+if args.dump:
+    dump_scripts()
 consts = read_addon_json(args)
 name = get_package_name(args)
 
