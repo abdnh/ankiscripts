@@ -1,9 +1,9 @@
 """
-This script runs Anki with the base folder `ankidata` in the current directory.
+This script runs Anki with the base folder `ankidata` in the current directory and some useful env variables set for debugging.
 This is intended for testing the add-on after building and copying src/ to ankidata/addons21 or symlinking it.
 """
-import subprocess
 import os
+import subprocess
 
 env = os.environ.copy()
 # Run debugger on uncaught exceptions (https://addon-docs.ankiweb.net/debugging.html#pdb)
