@@ -58,7 +58,7 @@ if args.homepage:
 if args.min_point_version:
     addon_meta["min_point_version"] = args.min_point_version
 with open(addon_json_path, "w", encoding="utf-8") as file:
-    json.dump(addon_meta, file, ensure_ascii=False)
+    json.dump(addon_meta, file, ensure_ascii=False, indent=4)
 
 # Readme
 readme_path = addon_root / "README.md"
