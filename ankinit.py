@@ -8,6 +8,8 @@ import os
 import re
 import subprocess
 import sys
+import types
+import venv
 from pathlib import Path
 
 addon_root = Path(".")
@@ -83,3 +85,32 @@ if sys.platform.startswith("win32"):
     )
 else:
     os.link(src_path, install_path)
+
+
+# Create venv and install deps
+
+
+class MyEnvBuilder(venv.EnvBuilder):
+    def post_setup(self, context: types.SimpleNamespace) -> None:
+        if sys.platform == "win32":
+            python_exe = os.path.join(context.bin_path, "python.exe")
+        else:
+            python_exe = os.path.join(context.bin_path, "python")
+        subprocess.check_call(
+            [
+                python_exe,
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "-r",
+                "requirements_dev.txt",
+            ]
+        )
+
+        return super().post_setup(context)
+
+
+venv_path = addon_root / ".venv"
+env_builder = MyEnvBuilder(with_pip=True, clear=True)
+env_builder.create(venv_path)
