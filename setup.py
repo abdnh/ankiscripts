@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
     name="ankibuild",
@@ -12,7 +12,9 @@ setup(
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
     ],
-    py_modules=["ankibuild", "ankirun", "ankinit"],
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    py_modules=["ankibuild"],
     install_requires=["jsonschema"],
     extras_require={
         "qt5": ["pyqt5"],
