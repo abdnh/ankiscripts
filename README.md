@@ -16,3 +16,8 @@ This is intended for testing the add-on after building and copying src/ to ankid
 ### ankinit.py
 
 This script automates some chores I used to do manually when setting up a new add-on using my add-on template (e.g. modifying README.md and addon.json, and symlinking the src folder to an Anki base folder.)
+
+### support.py
+
+This is used to format the "Support & feature requests" and "Support me" sections of my add-on template's README
+and set up add-on specific support links.
