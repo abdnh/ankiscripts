@@ -5,7 +5,7 @@ setup(
     version="1.0.0",
     description="A collection of scripts to build my Anki add-ons",
     author="Abdo",
-    author_email="abd.nh25@gmail.com",
+    author_email="abdo@abdnh.net",
     url="https://github.com/abdnh/ankiscripts",
     classifiers=[
         "Programming Language :: Python :: 3",
