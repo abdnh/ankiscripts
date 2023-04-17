@@ -1,12 +1,12 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="ankibuild",
+    name="ankiscripts",
     version="1.0.0",
-    description="Simple script to build Anki add-ons",
+    description="A collection of scripts to build my Anki add-ons",
     author="Abdo",
     author_email="abd.nh25@gmail.com",
-    url="https://github.com/abdnh/ankibuild",
+    url="https://github.com/abdnh/ankiscripts",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
