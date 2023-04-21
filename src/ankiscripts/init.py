@@ -141,6 +141,6 @@ class MyEnvBuilder(venv.EnvBuilder):
         return super().post_setup(context)
 
 
-venv_path = addon_root / ".venv"
+venv_path = addon_root / "venv"
 env_builder = MyEnvBuilder(with_pip=True, clear=True)
 env_builder.create(venv_path)
