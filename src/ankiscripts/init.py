@@ -59,6 +59,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 support_links = {}
+github_issues = None
 if args.github:
     github_issues = args.github
 elif args.homepage:
