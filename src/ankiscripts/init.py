@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import types
@@ -144,3 +145,8 @@ class MyEnvBuilder(venv.EnvBuilder):
 venv_path = addon_root / "venv"
 env_builder = MyEnvBuilder(with_pip=True, clear=True)
 env_builder.create(venv_path)
+
+# Copy VS Code settings
+vsode_dist = addon_root / ".vscode.dist"
+vscode_path = addon_root / ".vscode"
+shutil.copytree(vsode_dist, vscode_path)
