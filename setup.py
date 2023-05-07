@@ -18,7 +18,7 @@ setup(
     package_data={"ankiscripts": ["*.md", "*.html"]},
     install_requires=["jsonschema"],
     extras_require={
-        "qt5": ["pyqt5"],
-        "qt6": ["pyqt6"],
+        "qt5": ["pyqt5", "pyqtwebengine"],
+        "qt6": ["pyqt6", "pyqt6-webengine"],
     },
 )
