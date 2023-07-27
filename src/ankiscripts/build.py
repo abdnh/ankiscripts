@@ -178,7 +178,7 @@ def last_build_time(name: str) -> float:
         return 0.0
 
 
-def validate_config(args: argparse.Namespace) -> None:
+def validate_config() -> None:
     instance_path = Path("src/config.json")
     schema_path = Path("src/config.schema.json")
     if not instance_path.exists() or not schema_path.exists():
@@ -238,7 +238,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-validate_config(args)
+validate_config()
 buildtype = args.type
 qt_version = args.qt
 forms_dir = Path(f"./src/{args.forms_dir}")
