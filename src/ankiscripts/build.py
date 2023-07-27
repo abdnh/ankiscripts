@@ -303,9 +303,12 @@ if args.consts:
     write_consts()
 
 excludes = args.exclude if args.exclude else []
-for i, exclude in enumerate(excludes):
-    excludes[i] = f"-xr!{exclude}"
-excludes.append("-xr!meta.json")
+excludes.append("meta.json")
+
+dist_path = Path("build/dist")
+if dist_path.is_dir():
+    shutil.rmtree(dist_path)
+shutil.copytree("src", dist_path, ignore=shutil.ignore_patterns(*excludes))
 
 subprocess.check_call(
     [
@@ -315,7 +318,6 @@ subprocess.check_call(
         "-bso0",
         name,
         "-w",
-        "src/.",
-        *excludes,
+        "build/dist/.",
     ]
 )
