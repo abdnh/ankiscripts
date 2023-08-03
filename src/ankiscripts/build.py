@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 from time import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 import jsonschema
 
@@ -62,38 +62,64 @@ def write_consts() -> None:
     open("src/consts.py", "w", encoding="utf-8").write(s)
 
 
+def with_fixes_for_qt6(code: str) -> str:
+    outlines = []
+    qt_bad_types = [
+        ".connect(",
+    ]
+    for line in code.splitlines():
+        for substr in qt_bad_types:
+            if substr in line:
+                line = line + "  # type: ignore"
+                break
+        line = line.replace(
+            "QAction.PreferencesRole", "QAction.MenuRole.PreferencesRole"
+        )
+        line = line.replace("QAction.AboutRole", "QAction.MenuRole.AboutRole")
+        outlines.append(line)
+    return "\n".join(outlines)
+
+
+def with_fixes_for_qt5(code: str) -> str:
+    code = code.replace("Qt6", "Qt5")
+    code = code.replace("QtGui.QAction", "QtWidgets.QAction")
+    return code
+
+
 def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
     if not qt_version:
         return
     forms = list(Path("./designer").glob("*.ui"))
-    if forms:
-        forms_dir.mkdir(exist_ok=True)
-    if qt_version == "qt5":
-        from PyQt5.uic import compileUi
-    elif qt_version == "qt6":
-        from PyQt6.uic import compileUi  # type: ignore[no-redef]
+    if not forms:
+        return
+    forms_dir.mkdir(exist_ok=True)
     if qt_version != "all":
+        if qt_version == "qt5":
+            from PyQt5.uic import compileUi
+        elif qt_version == "qt6":
+            from PyQt6.uic import compileUi  # type: ignore[no-redef]
         for form in forms:
             buf = io.StringIO()
-            compileUi(open(form, encoding="utf-8"), buf)
+            with open(form, encoding="utf-8") as file:
+                compileUi(file, buf)
             name = form.stem + ".py"
             value = buf.getvalue()
-            open(forms_dir / name, "w", encoding="utf-8").write(value)
+            (forms_dir / name).write_text(value, encoding="utf-8")
     else:
-        from PyQt5.uic import compileUi as compileUi5
-        from PyQt6.uic import compileUi as compileUi6
+        from PyQt6.uic import compileUi  # type: ignore[no-redef]
 
-        funcs: dict[str, Callable[[Any, Any], None]] = {
-            "qt5": compileUi5,
-            "qt6": compileUi6,
-        }
         for form in forms:
-            for suffix, func in funcs.items():
-                buf = io.StringIO()
-                func(open(form, encoding="utf-8"), buf)
-                name = form.stem + f"_{suffix}.py"
-                value = buf.getvalue()
-                open(forms_dir / name, "w", encoding="utf-8").write(value)
+            buf = io.StringIO()
+            with open(form, encoding="utf-8") as file:
+                compileUi(file, buf)
+            stock = buf.getvalue()
+            for_qt6 = with_fixes_for_qt6(stock)
+            for_qt5 = with_fixes_for_qt5(for_qt6)
+            outpath = str(forms_dir / form.name)
+            with open(outpath.replace(".ui", "_qt5.py"), "w", encoding="utf-8") as file:
+                file.write(for_qt5)
+            with open(outpath.replace(".ui", "_qt6.py"), "w", encoding="utf-8") as file:
+                file.write(for_qt6)
 
 
 def get_package_name(args: argparse.Namespace) -> str:

@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="ankiscripts",
-    version="1.1.0",
+    version="1.2.0",
     description="A collection of scripts to build my Anki add-ons",
     author="Abdo",
     author_email="abdo@abdnh.net",
@@ -18,7 +18,8 @@ setup(
     package_data={"ankiscripts": ["*.md", "*.html"]},
     install_requires=["jsonschema"],
     extras_require={
-        "qt5": ["pyqt5", "pyqtwebengine"],
-        "qt6": ["pyqt6", "pyqt6-webengine"],
+        "qt5": ["pyqt5"],
+        "qt6": ["pyqt6"],
+        "forms": ["pyqt6"],
     },
 )
