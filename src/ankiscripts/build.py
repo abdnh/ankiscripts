@@ -121,6 +121,17 @@ def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
                 file.write(for_qt5)
             with open(outpath.replace(".ui", "_qt6.py"), "w", encoding="utf-8") as file:
                 file.write(for_qt6)
+            with open(outpath.replace(".ui", ".py"), "w", encoding="utf-8") as file:
+                file.write(
+                    f"""\
+from aqt.qt import qtmajor
+
+if qtmajor > 5:
+    from .{form.stem}_qt6 import *
+else:
+    from .{form.stem}_qt5 import *  # type: ignore
+"""
+                )
 
 
 def get_package_name(args: argparse.Namespace) -> str:
