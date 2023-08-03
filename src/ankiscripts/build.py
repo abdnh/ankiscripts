@@ -13,13 +13,14 @@ import jsonschema
 
 
 def read_addon_json(args: argparse.Namespace) -> Dict[str, Any]:
-    data = json.load(open("addon.json", encoding="utf-8"))
-    cmd_manifest = {}
-    if args.manifest:
-        cmd_manifest = json.loads(args.manifest)
-    for k, v in cmd_manifest.items():
-        data[k] = v
-    return data
+    with open("addon.json", encoding="utf-8") as file:
+        data = json.load(file)
+        cmd_manifest = {}
+        if args.manifest:
+            cmd_manifest = json.loads(args.manifest)
+        for k, v in cmd_manifest.items():
+            data[k] = v
+        return data
 
 
 def write_manifest(buildtype: str, mod: int) -> None:
@@ -50,16 +51,16 @@ def write_manifest(buildtype: str, mod: int) -> None:
     for key, value in consts_copy.items():
         manifest[key] = value
 
-    open("src/manifest.json", "w", encoding="utf-8").write(
-        json.dumps(manifest, ensure_ascii=False)
-    )
+    with open("src/manifest.json", "w", encoding="utf-8") as file:
+        file.write(json.dumps(manifest, ensure_ascii=False))
 
 
 def write_consts() -> None:
     s = ""
     for name, val in consts.items():
         s += f"{name.upper()} = {repr(val)}\n"
-    open("src/consts.py", "w", encoding="utf-8").write(s)
+    with open("src/consts.py", "w", encoding="utf-8") as file:
+        file.write(s)
 
 
 def with_fixes_for_qt6(code: str) -> str:
