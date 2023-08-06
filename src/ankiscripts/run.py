@@ -1,9 +1,17 @@
 """
 This script runs Anki with the base folder `ankidata` in the current directory and some useful env variables set for debugging.
-This is intended for testing the add-on after building and copying src/ to ankidata/addons21 or symlinking it.
 """
+import json
 import os
 import subprocess
+from pathlib import Path
+
+from ._utils import symlink_addon
+
+addon_root = Path.cwd()
+with open(addon_root / "addon.json", "r", encoding="utf-8") as file:
+    package = json.load(file)["package"]
+    symlink_addon(addon_root, package)
 
 env = os.environ.copy()
 # Run debugger on uncaught exceptions (https://addon-docs.ankiweb.net/debugging.html#pdb)

@@ -14,6 +14,7 @@ import venv
 from pathlib import Path
 
 from . import support
+from ._utils import symlink_addon
 
 addon_root = Path(".")
 
@@ -105,18 +106,7 @@ ankiweb_readme = support.format(ankiweb_readme, support_links)
 ankiweb_page_path.write_text(ankiweb_readme, encoding="utf-8")
 
 # Symlinking
-src_path = addon_root / "src"
-install_path = addon_root / "ankidata" / "addons21" / str(args.package)
-install_path.parent.mkdir(parents=True, exist_ok=True)
-if sys.platform.startswith("win32"):
-    subprocess.run(
-        'mklink /J "{}" "{}"'.format(str(install_path), str(src_path)),
-        shell=True,
-        check=True,
-    )
-else:
-    os.link(src_path, install_path)
-
+symlink_addon(addon_root, args.package)
 
 # Create venv and install deps
 
