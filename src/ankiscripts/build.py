@@ -7,23 +7,23 @@ import subprocess
 import sys
 from pathlib import Path
 from time import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import jsonschema
 
 
-def read_addon_json(args: argparse.Namespace) -> Dict[str, Any]:
-    with open("addon.json", encoding="utf-8") as file:
+def read_addon_json(root_dir: Path, extra_manifest: str) -> Dict[str, Any]:
+    with open(root_dir / "addon.json", encoding="utf-8") as file:
         data = json.load(file)
-        cmd_manifest = {}
-        if args.manifest:
-            cmd_manifest = json.loads(args.manifest)
-        for k, v in cmd_manifest.items():
+        extra_manifest_dict = {}
+        if extra_manifest:
+            extra_manifest_dict = json.loads(extra_manifest)
+        for k, v in extra_manifest_dict.items():
             data[k] = v
         return data
 
 
-def write_manifest(buildtype: str, mod: int) -> None:
+def write_manifest(src_dir: Path, buildtype: str, mod: int) -> None:
     consts_copy = consts.copy()
     manifest = {
         "name": consts_copy["name"],
@@ -51,15 +51,15 @@ def write_manifest(buildtype: str, mod: int) -> None:
     for key, value in consts_copy.items():
         manifest[key] = value
 
-    with open("src/manifest.json", "w", encoding="utf-8") as file:
+    with open(src_dir / "manifest.json", "w", encoding="utf-8") as file:
         file.write(json.dumps(manifest, ensure_ascii=False))
 
 
-def write_consts() -> None:
+def write_consts(src_dir: Path, consts: Dict[str, Any]) -> None:
     s = ""
     for name, val in consts.items():
         s += f"{name.upper()} = {repr(val)}\n"
-    with open("src/consts.py", "w", encoding="utf-8") as file:
+    with open(src_dir / "consts.py", "w", encoding="utf-8") as file:
         file.write(s)
 
 
@@ -96,10 +96,10 @@ def with_fixes_for_qt5(code: str) -> str:
     return code
 
 
-def generate_forms(qt_version: Optional[str], forms_dir: Path) -> None:
+def generate_forms(root_dir: Path, qt_version: Optional[str], forms_dir: Path) -> None:
     if not qt_version:
         return
-    forms = list(Path("./designer").glob("*.ui"))
+    forms = list((root_dir / "designer").glob("*.ui"))
     if not forms:
         return
     forms_dir.mkdir(exist_ok=True)
@@ -143,18 +143,21 @@ else:
                 )
 
 
-def get_package_name(args: argparse.Namespace) -> str:
-    os.makedirs("build", exist_ok=True)
-    if args.out:
-        return args.out
-    name = f"build/{consts['package']}"
-    if args.type == "ankiweb":
+def get_package_path(
+    root_dir: Path, buildtype: str, qt_version: str, out_path: Optional[Path] = None
+) -> Path:
+    build_dir = root_dir / "build"
+    os.makedirs(build_dir, exist_ok=True)
+    if out_path:
+        return out_path
+    name = consts["package"]
+    if buildtype == "ankiweb":
         name += "_ankiweb"
-    if args.qt and args.qt != "all":
-        name += f"_{args.qt}"
+    if qt_version and qt_version != "all":
+        name += f"_{qt_version}"
     name += ".ankiaddon"
 
-    return name
+    return build_dir / name
 
 
 def dump_scripts() -> None:
@@ -169,18 +172,24 @@ def dump_scripts() -> None:
         dest_file.write_text(src_file.read_text(encoding="utf-8"), encoding="utf-8")
 
 
-def most_recent_change(args: argparse.Namespace) -> float:
-    excludes = args.exclude if args.exclude else []
+def most_recent_change(
+    root_dir: Path,
+    qt_version: str,
+    exclude: Optional[List[str]],
+) -> float:
+    excludes = exclude if exclude else []
     newest = 0.0
     paths = ["src", "addon.json"]
-    if args.qt:
+    if qt_version:
         paths.append("designer")
-        for ui in Path("designer").glob("*.ui"):
+    paths = [root_dir / p for p in paths]
+    if qt_version:
+        for ui in (root_dir / "designer").glob("*.ui"):
             form_file = ui.with_suffix(".py")
             form_files = []
-            if args.qt in ("qt5", "all"):
+            if qt_version in ("qt5", "all"):
                 form_files.append(form_file.with_stem(f"{form_file.stem}_qt5"))
-            if args.qt in ("qt6", "all"):
+            if qt_version in ("qt6", "all"):
                 form_files.append(form_file.with_stem(f"{form_file.stem}_qt6"))
             for file in form_files:
                 if not file.exists():
@@ -191,7 +200,7 @@ def most_recent_change(args: argparse.Namespace) -> float:
             newest = max(newest, os.stat(path).st_mtime)
         else:
             for dirpath, dirs, fnames in os.walk(path, topdown=True):
-                if path == "src":
+                if path.name == "src":
                     # Apply exclude list
                     new_dirs = []
                     for d in dirs:
@@ -212,22 +221,25 @@ def most_recent_change(args: argparse.Namespace) -> float:
     return newest
 
 
-def needs_build(args: argparse.Namespace, name: str) -> bool:
-    build_ts = last_build_time(name)
-    mod_ts = most_recent_change(args)
+def needs_build(
+    root_dir: Path, qt_version: str, exclude: Optional[List[str]], package_path: Path
+) -> bool:
+    build_ts = last_build_time(package_path)
+    mod_ts = most_recent_change(root_dir, qt_version, exclude)
+
     return mod_ts > build_ts
 
 
-def last_build_time(name: str) -> float:
+def last_build_time(package_path: Path) -> float:
     try:
-        return os.stat(name).st_mtime
+        return os.stat(package_path).st_mtime
     except Exception:
         return 0.0
 
 
-def validate_config() -> None:
-    instance_path = Path("src/config.json")
-    schema_path = Path("src/config.schema.json")
+def validate_config(src_dir: Path) -> None:
+    instance_path = src_dir / "config.json"
+    schema_path = src_dir / "config.schema.json"
     if not instance_path.exists() or not schema_path.exists():
         return
     instance = json.loads(instance_path.read_text(encoding="utf-8"))
@@ -237,6 +249,11 @@ def validate_config() -> None:
 
 parser = argparse.ArgumentParser()
 
+parser.add_argument(
+    "--root",
+    help="specify the root directory to use. defaults to the current directory.",
+    default=".",
+)
 parser.add_argument(
     "--type",
     choices=("ankiweb", "package"),
@@ -285,38 +302,48 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-validate_config()
+root_dir = Path(args.root).resolve()
+src_dir = root_dir / "src"
+validate_config(src_dir)
 buildtype = args.type
 qt_version = args.qt
-forms_dir = Path(f"./src/{args.forms_dir}")
+out_path = Path(args.out) if args.out else None
+forms_dir = src_dir / args.forms_dir
 
 if args.dump:
     dump_scripts()
-consts = read_addon_json(args)
-name = get_package_name(args)
+extra_manifest = args.manifest
+consts = read_addon_json(root_dir, extra_manifest)
+package_path = get_package_path(
+    root_dir,
+    buildtype,
+    qt_version,
+    out_path,
+)
 
-if not needs_build(args, name):
+excludes = args.exclude if args.exclude else []
+excludes.append("meta.json")
+if not needs_build(root_dir, qt_version, excludes, package_path):
     sys.exit(0)
 
 to_remove = {"**/__pycache__"}
 for pattern in to_remove:
-    for path in Path("./src").glob(pattern):
+    for path in src_dir.glob(pattern):
         if path.is_dir():
             shutil.rmtree(path)
         else:
             os.remove(path)
 
-write_manifest(buildtype, int(Path("./src").stat().st_mtime))
-generate_forms(qt_version, forms_dir)
+write_manifest(src_dir, buildtype, int(src_dir.stat().st_mtime))
+generate_forms(root_dir, qt_version, forms_dir)
 if args.consts:
-    write_consts()
+    write_consts(src_dir, consts)
 
-dist_path = Path("build/dist")
+dist_path = root_dir / "build/dist"
 if dist_path.is_dir():
     shutil.rmtree(dist_path)
-excludes = args.exclude if args.exclude else []
-excludes.append("meta.json")
-shutil.copytree("src", dist_path, ignore=shutil.ignore_patterns(*excludes))
+
+shutil.copytree(src_dir, dist_path, ignore=shutil.ignore_patterns(*excludes))
 copy_support_files(dist_path)
 
 subprocess.check_call(
@@ -325,8 +352,8 @@ subprocess.check_call(
         "a",
         "-tzip",
         "-bso0",
-        name,
+        str(package_path),
         "-w",
-        "build/dist/.",
+        f"{str(dist_path)}/.",
     ]
 )
