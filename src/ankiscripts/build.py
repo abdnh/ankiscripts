@@ -91,6 +91,13 @@ class Builder:
             metavar="JSON",
             required=False,
         )
+        parser.add_argument(
+            "--copy",
+            "-c",
+            help="Copy specified additional files/directories matching PATTERNS to the distribution. Patterns are relative to the root directory.",
+            metavar="PATTERNS",
+        )
+
         args = parser.parse_args()
 
         self.root_dir = Path(args.root).resolve()
@@ -107,6 +114,9 @@ class Builder:
         self.package_path = Path(args.out) if args.out else self._get_package_path()
         self.excludes: List[str] = list(args.exclude) if args.exclude else []
         self.excludes.append("meta.json")
+        self.copy_patterns = ["README.md", "LICENSE*", "CHANGELOG.md"]
+        if args.copy:
+            self.copy_patterns.extend(args.copy.split())
 
     def _get_package_path(self) -> Path:
         name = self.consts["package"]
@@ -224,15 +234,16 @@ class Builder:
         with open(self.src_dir / "consts.py", "w", encoding="utf-8") as file:
             file.write(s)
 
-    def _copy_support_files(self) -> None:
-        for filename in ["README.md", "LICENSE", "CHANGELOG.md"]:
-            try:
-                with open(self.root_dir / filename, "r", encoding="utf-8") as srcfile:
-                    (self.dist_dir / filename).write_text(
-                        srcfile.read(), encoding="utf-8"
-                    )
-            except FileNotFoundError:
-                pass
+    def _copy_additional_files(self) -> None:
+        for pattern in self.copy_patterns:
+            for path in self.root_dir.glob(pattern):
+                rel_path = self.dist_dir / path.relative_to(self.root_dir)
+                if path.is_dir():
+                    rel_path.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(path, rel_path, dirs_exist_ok=True)
+                else:
+                    with open(path, "r", encoding="utf-8") as srcfile:
+                        rel_path.write_text(srcfile.read(), encoding="utf-8")
 
     def build(self) -> None:
         self._validate_config()
@@ -251,7 +262,7 @@ class Builder:
         shutil.copytree(
             self.src_dir, self.dist_dir, ignore=shutil.ignore_patterns(*self.excludes)
         )
-        self._copy_support_files()
+        self._copy_additional_files()
         self.package_path.unlink(missing_ok=True)
         subprocess.check_call(
             [
