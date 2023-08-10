@@ -160,18 +160,6 @@ def get_package_path(
     return build_dir / name
 
 
-def dump_scripts() -> None:
-    src_file = Path(__file__)
-    dest_file = Path("./build.py").resolve()
-    if src_file != dest_file:
-        dest_file.write_text(src_file.read_text(encoding="utf-8"), encoding="utf-8")
-
-    src_file = Path(os.path.join(os.path.dirname(__file__), "ankirun.py"))
-    dest_file = Path("./run.py").resolve()
-    if src_file != dest_file:
-        dest_file.write_text(src_file.read_text(encoding="utf-8"), encoding="utf-8")
-
-
 def most_recent_change(
     root_dir: Path,
     qt_version: str,
@@ -267,11 +255,6 @@ parser.add_argument(
     help="build Qt designer forms of the specified version",
 )
 parser.add_argument(
-    "--dump",
-    action="store_true",
-    help="dump this build script and the run script to the current directory for stand-alone source distributions",
-)
-parser.add_argument(
     "--consts",
     action="store_true",
     help="generate src/consts.py from addon.json",
@@ -309,9 +292,6 @@ buildtype = args.type
 qt_version = args.qt
 out_path = Path(args.out) if args.out else None
 forms_dir = src_dir / args.forms_dir
-
-if args.dump:
-    dump_scripts()
 extra_manifest = args.manifest
 consts = read_addon_json(root_dir, extra_manifest)
 package_path = get_package_path(
