@@ -1,4 +1,5 @@
 import argparse
+import enum
 import io
 import json
 import os
@@ -34,6 +35,13 @@ def with_fixes_for_qt5(code: str) -> str:
     return code
 
 
+class QtVersion(enum.Enum):
+    NONE = "none"
+    ALL = "all"
+    QT5 = "qt5"
+    QT6 = "qt6"
+
+
 class Builder:
     def __init__(self) -> None:
         parser = argparse.ArgumentParser()
@@ -50,8 +58,9 @@ class Builder:
         )
         parser.add_argument(
             "--qt",
-            choices=("qt5", "qt6", "all"),
+            choices=("qt5", "qt6", "all", "none"),
             help="build Qt designer forms of the specified version",
+            default="all",
         )
         parser.add_argument(
             "--consts",
@@ -90,7 +99,7 @@ class Builder:
         self.build_dir = self.root_dir / "build"
         self.dist_dir = self.build_dir / "dist"
         self.build_type = args.type
-        self.qt_version = args.qt
+        self.qt_version = QtVersion(str(args.qt).lower()) if args.qt else QtVersion.NONE
         self.extra_manifest: Dict[str, Any] = (
             json.loads(args.manifest) if args.manifest else {}
         )
@@ -103,8 +112,8 @@ class Builder:
         name = self.consts["package"]
         if self.build_type == "ankiweb":
             name += "_ankiweb"
-        if self.qt_version and self.qt_version != "all":
-            name += f"_{self.qt_version}"
+        if self.qt_version in (QtVersion.QT5, QtVersion.QT6):
+            name += f"_{self.qt_version.value}"
         name += ".ankiaddon"
 
         return self.build_dir / name
@@ -157,16 +166,16 @@ class Builder:
             file.write(json.dumps(manifest, ensure_ascii=False))
 
     def _generate_forms(self) -> None:
-        if not self.qt_version:
+        if self.qt_version is QtVersion.NONE:
             return
         forms = list((self.root_dir / "designer").glob("*.ui"))
         if not forms:
             return
         self.forms_dir.mkdir(exist_ok=True)
-        if self.qt_version != "all":
-            if self.qt_version == "qt5":
+        if self.qt_version is not QtVersion.ALL:
+            if self.qt_version is QtVersion.QT5:
                 from PyQt5.uic import compileUi
-            elif self.qt_version == "qt6":
+            else:
                 from PyQt6.uic import compileUi  # type: ignore[no-redef]
             for form in forms:
                 buf = io.StringIO()
