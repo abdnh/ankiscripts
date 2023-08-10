@@ -111,6 +111,7 @@ class Builder:
             json.loads(args.manifest) if args.manifest else {}
         )
         self.consts = self._read_addon_json()
+        self.should_write_consts = bool(args.consts)
         self.package_path = Path(args.out) if args.out else self._get_package_path()
         self.excludes: List[str] = list(args.exclude) if args.exclude else []
         self.excludes.append("meta.json")
@@ -226,7 +227,7 @@ class Builder:
                     )
 
     def _write_consts(self) -> None:
-        if not self.consts:
+        if not self.should_write_consts or not self.consts:
             return
         s = ""
         for name, val in self.consts.items():
