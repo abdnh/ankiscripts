@@ -63,6 +63,15 @@ def write_consts() -> None:
         file.write(s)
 
 
+def copy_support_files(dist_path: Path) -> None:
+    for filename in ["README.md", "LICENSE", "CHANGELOG.md"]:
+        try:
+            with open(filename, "r", encoding="utf-8") as srcfile:
+                (dist_path / filename).write_text(srcfile.read(), encoding="utf-8")
+        except FileNotFoundError:
+            pass
+
+
 def with_fixes_for_qt6(code: str) -> str:
     outlines = []
     qt_bad_types = [
@@ -302,13 +311,13 @@ generate_forms(qt_version, forms_dir)
 if args.consts:
     write_consts()
 
-excludes = args.exclude if args.exclude else []
-excludes.append("meta.json")
-
 dist_path = Path("build/dist")
 if dist_path.is_dir():
     shutil.rmtree(dist_path)
+excludes = args.exclude if args.exclude else []
+excludes.append("meta.json")
 shutil.copytree("src", dist_path, ignore=shutil.ignore_patterns(*excludes))
+copy_support_files(dist_path)
 
 subprocess.check_call(
     [
