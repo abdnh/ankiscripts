@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="ankiscripts",
-    version="1.2.1",
+    version="1.3.0",
     description="A collection of scripts to build my Anki add-ons",
     author="Abdo",
     author_email="abdo@abdnh.net",
