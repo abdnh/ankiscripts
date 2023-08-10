@@ -252,6 +252,7 @@ class Builder:
             self.src_dir, self.dist_dir, ignore=shutil.ignore_patterns(*self.excludes)
         )
         self._copy_support_files()
+        self.package_path.unlink(missing_ok=True)
         subprocess.check_call(
             [
                 "7z",
