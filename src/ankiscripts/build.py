@@ -4,9 +4,7 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
-from time import time
 from typing import Any, Dict, List
 
 import jsonschema
@@ -227,60 +225,6 @@ class Builder:
             except FileNotFoundError:
                 pass
 
-    def _most_recent_change(self) -> float:
-        newest = 0.0
-        path_names = ["src", "addon.json"]
-        if self.qt_version:
-            path_names.append("designer")
-        paths = [self.root_dir / n for n in path_names]
-        if self.qt_version:
-            for ui in (self.root_dir / "designer").glob("*.ui"):
-                base_form = (self.forms_dir / ui.name).with_suffix(".py")
-                form_files = []
-                form_files.append(base_form)
-                if self.qt_version == "all":
-                    form_files.append(base_form.with_stem(f"{base_form.stem}_qt5"))
-                    form_files.append(base_form.with_stem(f"{base_form.stem}_qt6"))
-                for file in form_files:
-                    if not file.exists():
-                        newest = time()
-                        break
-        for path in paths:
-            if os.path.isfile(path):
-                newest = max(newest, os.stat(path).st_mtime)
-            else:
-                for dirpath, dirs, fnames in os.walk(path, topdown=True):
-                    if path.name == "src":
-                        # Apply exclude list
-                        new_dirs = []
-                        for d in dirs:
-                            p = dirpath / Path(d)
-                            if not any(p.match(e) for e in self.excludes):
-                                new_dirs.append(d)
-                        dirs[:] = new_dirs
-                        new_fnames = []
-                        for f in fnames:
-                            p = Path(f)
-                            if not any(p.match(e) for e in self.excludes):
-                                new_fnames.append(f)
-                        fnames[:] = new_fnames
-                    for fname in fnames:
-                        p = Path(dirpath) / fname
-                        newest = max(newest, os.stat(p).st_mtime)
-
-        return newest
-
-    def _last_build_time(self) -> float:
-        try:
-            return os.stat(self.package_path).st_mtime
-        except Exception:
-            return 0.0
-
-    def is_up_to_date(self) -> bool:
-        build_ts = self._last_build_time()
-        mod_ts = self._most_recent_change()
-        return mod_ts < build_ts
-
     def build(self) -> None:
         self._validate_config()
         if self.dist_dir.is_dir():
@@ -315,7 +259,4 @@ class Builder:
 if __name__ == "__main__":
 
     builder = Builder()
-    if builder.is_up_to_date():
-        print("already up to date")
-        sys.exit(0)
     builder.build()
