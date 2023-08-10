@@ -111,12 +111,15 @@ symlink_addon(addon_root, args.package)
 # Create venv and install deps
 
 
+def add_exe_suffix(path: str) -> str:
+    if sys.platform == "win32":
+        path = path + ".exe"
+    return path
+
+
 class MyEnvBuilder(venv.EnvBuilder):
     def post_setup(self, context: types.SimpleNamespace) -> None:
-        if sys.platform == "win32":
-            python_exe = os.path.join(context.bin_path, "python.exe")
-        else:
-            python_exe = os.path.join(context.bin_path, "python")
+        python_exe = add_exe_suffix(os.path.join(context.bin_path, "python"))
         subprocess.check_call(
             [
                 python_exe,
@@ -126,6 +129,13 @@ class MyEnvBuilder(venv.EnvBuilder):
                 "--upgrade",
                 "-r",
                 "requirements_dev.txt",
+            ]
+        )
+        precommit_exe = add_exe_suffix(os.path.join(context.bin_path, "pre-commit"))
+        subprocess.check_call(
+            [
+                precommit_exe,
+                "install",
             ]
         )
 
