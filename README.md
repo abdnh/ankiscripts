@@ -4,20 +4,20 @@ Scripts for Anki add-on development intended for my own use. The file structure 
 
 ## Scripts
 
-### ankibuild.py
+### [build.py](src/ankiscripts/build.py)
 
 A script to package add-on sources into an .ankiaddon file. It's inspired by [ankitects/anki-addons](https://github.com/ankitects/anki-addons) and [glutanimate/anki-addon-builder](https://github.com/glutanimate/anki-addon-builder). Take a look at Glutanimate's add-on builder if you want something more mature and tested.
 
-### ankirun.py
+### [run.py](src/ankiscripts/run.py)
 
 This script runs Anki with the base folder `ankidata` in the current directory and some useful env variables set for debugging.
 This is intended for testing the add-on after building and copying src/ to ankidata/addons21 or symlinking it.
 
-### ankinit.py
+### [init.py](src/ankiscripts/init.py)
 
 This script automates some chores I used to do manually when setting up a new add-on using my add-on template (e.g. modifying README.md and addon.json, and symlinking the src folder to an Anki base folder.)
 
-### support.py
+### [support.py](src/ankiscripts/support.py)
 
 This is used to format the "Support & feature requests" and "Support me" sections of my add-on template's README
 and set up add-on specific support links.
