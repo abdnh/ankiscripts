@@ -1,7 +1,27 @@
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+
+def pip_install(python_exe: str, reqs_filename: str, target: str | None = None) -> None:
+    target_args = []
+    if target:
+        target_args.extend(["--target", target])
+    subprocess.check_call(
+        [
+            python_exe,
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "-r",
+            reqs_filename,
+            *target_args,
+        ]
+    )
 
 
 def symlink_addon(addon_root: Path, addon_package: str) -> None:

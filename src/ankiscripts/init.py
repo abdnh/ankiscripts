@@ -13,8 +13,8 @@ import types
 import venv
 from pathlib import Path
 
-from . import support
-from ._utils import symlink_addon
+from . import support, vendor
+from ._utils import pip_install, symlink_addon
 
 addon_root = Path(".")
 
@@ -120,17 +120,7 @@ def add_exe_suffix(path: str) -> str:
 class MyEnvBuilder(venv.EnvBuilder):
     def post_setup(self, context: types.SimpleNamespace) -> None:
         python_exe = add_exe_suffix(os.path.join(context.bin_path, "python"))
-        subprocess.check_call(
-            [
-                python_exe,
-                "-m",
-                "pip",
-                "install",
-                "--upgrade",
-                "-r",
-                "requirements_dev.txt",
-            ]
-        )
+        pip_install(python_exe, "requirements_dev.txt")
         precommit_exe = add_exe_suffix(os.path.join(context.bin_path, "pre-commit"))
         subprocess.check_call(
             [
@@ -138,7 +128,7 @@ class MyEnvBuilder(venv.EnvBuilder):
                 "install",
             ]
         )
-
+        vendor.install_libs()
         return super().post_setup(context)
 
 
