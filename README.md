@@ -21,3 +21,7 @@ This script automates some chores I used to do manually when setting up a new ad
 
 This is used to format the "Support & feature requests" and "Support me" sections of my add-on template's README
 and set up add-on specific support links.
+
+### [update.py](src/ankiscripts/update.py)
+
+This script takes a path to an add-on and compares it with the template, offering to write non-existing files and output diffs of changed files. I use this to update add-ons with the latest changes to the template.

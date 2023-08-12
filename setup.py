@@ -16,7 +16,7 @@ setup(
     package_dir={"": "src"},
     py_modules=["ankibuild"],
     package_data={"ankiscripts": ["*.md", "*.html"]},
-    install_requires=["jsonschema"],
+    install_requires=["jsonschema", "questionary"],
     extras_require={
         "qt5": ["pyqt5"],
         "qt6": ["pyqt6"],
