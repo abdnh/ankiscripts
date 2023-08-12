@@ -9,3 +9,4 @@ pylint
 black
 isort
 jsonschema
+questionary
