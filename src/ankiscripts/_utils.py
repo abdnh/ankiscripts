@@ -6,6 +6,12 @@ import sys
 from pathlib import Path
 
 
+def add_exe_suffix(path: str) -> str:
+    if sys.platform == "win32":
+        path = path + ".exe"
+    return path
+
+
 def pip_install(python_exe: str, reqs_filename: str, target: str | None = None) -> None:
     target_args = []
     if target:

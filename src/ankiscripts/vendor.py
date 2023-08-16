@@ -8,10 +8,10 @@ from ._utils import pip_install
 
 def install_libs() -> None:
     addon_root = Path(".")
-    reqs_path = addon_root / "requirements.txt"
+    reqs_path = addon_root / "requirements" / "bundle.txt"
     if not reqs_path.exists():
         print(
-            "requirements.txt not found; skipping installation of vendored libraries",
+            "requirements/bundle.txt not found; skipping installation of vendored libraries",
             file=sys.stderr,
         )
         return
@@ -23,7 +23,8 @@ def install_libs() -> None:
     bash_exe = shutil.which("bash")
 
     pip_install(python_exe, str(reqs_path), str(vendor_path))
-    shutil.rmtree(bin_path)
+    if bin_path.exists():
+        shutil.rmtree(bin_path)
     if vendor_script_path.exists():
         # Seems like Bash on Windows expects POSIX paths
         subprocess.check_call([bash_exe, str(vendor_script_path.as_posix())])

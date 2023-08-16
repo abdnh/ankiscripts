@@ -8,13 +8,13 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import types
 import venv
 from pathlib import Path
 
 from . import support, vendor
-from ._utils import pip_install, symlink_addon
+from ._utils import add_exe_suffix, pip_install, symlink_addon
+from .update_deps import update_deps
 
 addon_root = Path(".")
 
@@ -111,16 +111,9 @@ symlink_addon(addon_root, args.package)
 # Create venv and install deps
 
 
-def add_exe_suffix(path: str) -> str:
-    if sys.platform == "win32":
-        path = path + ".exe"
-    return path
-
-
 class MyEnvBuilder(venv.EnvBuilder):
     def post_setup(self, context: types.SimpleNamespace) -> None:
-        python_exe = add_exe_suffix(os.path.join(context.bin_path, "python"))
-        pip_install(python_exe, "requirements_dev.txt")
+        update_deps(context.bin_path)
         precommit_exe = add_exe_suffix(os.path.join(context.bin_path, "pre-commit"))
         subprocess.check_call(
             [
