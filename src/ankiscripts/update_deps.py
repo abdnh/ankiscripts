@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -17,10 +18,14 @@ def update_deps(bin_path: str | Path, req_type: str | None = None) -> None:
         "--upgrade",
     ]
     bin_path = Path(bin_path)
-    python_exe = add_exe_suffix(str(bin_path / "python"))
-    pip_compile_exe = add_exe_suffix(str(bin_path / "pip-compile"))
-    pip_sync_exe = add_exe_suffix(str(bin_path / "pip-sync"))
-
+    if bin_path.exists():
+        python_exe = add_exe_suffix(str(bin_path / "python"))
+        pip_compile_exe = add_exe_suffix(str(bin_path / "pip-compile"))
+        pip_sync_exe = add_exe_suffix(str(bin_path / "pip-sync"))
+    else:
+        python_exe = shutil.which("python")
+        pip_compile_exe = shutil.which("pip-compile")
+        pip_sync_exe = shutil.which("pip-sync")
     if req_type is not None:
         subprocess.check_call([pip_compile_exe, *args, f"requirements/{req_type}.in"])
     else:
