@@ -9,9 +9,13 @@ from pathlib import Path
 from ._utils import symlink_addon
 
 addon_root = Path.cwd()
-with open(addon_root / "addon.json", "r", encoding="utf-8") as file:
-    package = json.load(file)["package"]
-    symlink_addon(addon_root, package)
+addon_json_path = addon_root / "addon.json"
+if addon_json_path.exists():
+    with open(addon_json_path, "r", encoding="utf-8") as file:
+        package = json.load(file)["package"]
+else:
+    package = addon_root.name
+symlink_addon(addon_root, package)
 
 env = os.environ.copy()
 # Run debugger on uncaught exceptions (https://addon-docs.ankiweb.net/debugging.html#pdb)
