@@ -108,7 +108,7 @@ def compare(a: str | Path, b: str | Path) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("addon", help="Add-on path")
+    parser.add_argument("--root", help="Add-on root", required=False, default=".")
     parser.add_argument(
         "--template",
         help="URL or file path to get add-on template from",
@@ -116,7 +116,7 @@ if __name__ == "__main__":
         default="https://github.com/abdnh/anki-addon-template/archive/refs/heads/master.zip",
     )
     args = parser.parse_args()
-    addon_path = Path(args.addon)
+    addon_path = Path(args.root)
     template_location = str(args.template)
 
     if re.match("https?://", template_location):
