@@ -1,5 +1,6 @@
 import argparse
 import enum
+import fnmatch
 import io
 import json
 import os
@@ -246,6 +247,20 @@ class Builder:
                     with open(path, "r", encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
 
+    def _ignore_patterns(self, *patterns):
+        """Like shutil.ignore_patterns except that patterns are assumed to be relative to the source directory."""
+
+        def inner_ignore_patterns(path, names):
+            dirname = os.path.basename(path)
+            names = [os.path.join(dirname, name) for name in names]
+            ignored_names = []
+            for pattern in patterns:
+                ignored_names.extend(fnmatch.filter(names, pattern))
+            ignored_names = [os.path.relpath(name, dirname) for name in ignored_names]
+            return set(ignored_names)
+
+        return inner_ignore_patterns
+
     def build(self) -> None:
         self._validate_config()
         if self.dist_dir.is_dir():
@@ -261,7 +276,7 @@ class Builder:
         self._generate_forms()
         self._write_consts()
         shutil.copytree(
-            self.src_dir, self.dist_dir, ignore=shutil.ignore_patterns(*self.excludes)
+            self.src_dir, self.dist_dir, ignore=self._ignore_patterns(*self.excludes)
         )
         self._copy_additional_files()
         self.package_path.unlink(missing_ok=True)
@@ -279,6 +294,5 @@ class Builder:
 
 
 if __name__ == "__main__":
-
     builder = Builder()
     builder.build()
