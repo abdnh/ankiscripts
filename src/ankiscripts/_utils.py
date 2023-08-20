@@ -13,6 +13,9 @@ def add_exe_suffix(path: str) -> str:
 
 
 def pip_install(python_exe: str, reqs_filename: str, target: str | None = None) -> None:
+    with open(reqs_filename, "r", encoding="utf-8") as file:
+        if not file.read().strip():
+            return
     target_args = []
     if target:
         target_args.extend(["--target", target])
