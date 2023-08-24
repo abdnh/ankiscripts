@@ -115,7 +115,7 @@ class Builder:
         self.should_write_consts = bool(args.consts)
         self.package_path = Path(args.out) if args.out else self._get_package_path()
         self.excludes: List[str] = list(args.exclude) if args.exclude else []
-        self.excludes.append("meta.json")
+        self.excludes.extend(["meta.json", "py.typed"])
         self.copy_patterns = ["README.md", "LICENSE*", "CHANGELOG.md"]
         if args.copy:
             self.copy_patterns.extend(args.copy.split())
