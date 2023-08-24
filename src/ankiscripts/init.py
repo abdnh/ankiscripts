@@ -88,6 +88,15 @@ if args.min_point_version:
 with open(addon_json_path, "w", encoding="utf-8") as file:
     json.dump(addon_meta, file, ensure_ascii=False, indent=4)
 
+# pyproject.toml
+pyproject_toml_path = addon_root / "pyproject.toml"
+if pyproject_toml_path.exists():
+    pyproject_toml = pyproject_toml_path.read_text(encoding="utf-8").replace(
+        "anki_addon_template", args.package
+    )
+    pyproject_toml_path.write_text(pyproject_toml, encoding="utf-8")
+
+
 # Readme
 readme_path = addon_root / "README.md"
 readme = readme_path.read_text(encoding="utf-8")
