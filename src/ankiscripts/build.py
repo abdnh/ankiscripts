@@ -7,7 +7,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List, Sequence
 
 import jsonschema
 
@@ -247,11 +247,14 @@ class Builder:
                     with open(path, "r", encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
 
-    def _ignore_patterns(self, *patterns):
+    def _ignore_patterns(self, *patterns: str):
         """Like shutil.ignore_patterns except that patterns are assumed to be relative to the source directory."""
 
-        def inner_ignore_patterns(path, names):
-            dirname = os.path.basename(path)
+        def inner_ignore_patterns(path: str, names: Sequence[str]) -> Iterable[str]:
+            if str(path) == str(self.src_dir):
+                dirname = ""
+            else:
+                dirname = os.path.basename(path)
             names = [os.path.join(dirname, name) for name in names]
             ignored_names = []
             for pattern in patterns:
