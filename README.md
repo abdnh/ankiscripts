@@ -28,7 +28,7 @@ This script takes a path to an add-on and compares it with the template, offerin
 
 ### [vendor.py](src/ankiscripts/vendor.py)
 
-This installs libraries in requirements/bundle.txt (if found) to src/vendor.
+This installs libraries in requirements/bundle.txt (if found) to src/vendor. It has experimental support for handling dependencies with C modules by downloading platform-specific wheels and copying library files to the vendor folder.
 
 ### [update_deps.py](src/ankiscripts/update_deps.py)
 
