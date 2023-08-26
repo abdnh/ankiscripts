@@ -33,3 +33,7 @@ This installs libraries in requirements/bundle.txt (if found) to src/vendor.
 ### [update_deps.py](src/ankiscripts/update_deps.py)
 
 This updates dependencies using [pip-tools](https://github.com/jazzband/pip-tools).
+
+### [sourcedist.py](src/ankiscripts/sourcedist.py)
+
+This creates a sources zip using git-archive and git-bundle.
