@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import shutil
 import subprocess
 import sys
@@ -11,20 +12,20 @@ from typing import Iterable
 from ._utils import pip_install
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
-# TODO: do we really need to specify all of these?
-DEFAULT_PLATFORMS = (
-    "win_amd64",
-    "manylinux_2_5_x86_64",
-    "manylinux_2_12_x86_64",
-    "manylinux_2_17_x86_64",
-    "manylinux_2_28_x86_64",
-    "manylinux_2_31_aarch64",
-    "macosx_10_9_x86_64",
-    "macosx_10_10_x86_64",
-    "macosx_10_13_x86_64",
-    "macosx_11_0_arm64",
-)
 DEFAULT_PYTHON_VERSIONS = ("38", "39")
+
+
+def default_platforms_for_python_version(version: str) -> tuple[str, ...]:
+    if int(version) <= 38:
+        return ("win_amd64", "manylinux2014_x86_64", "macosx_10_7_x86_64")
+    # https://github.com/ankitects/anki/blob/740528eaf913ff4bb9d112d494a10e84fd01365a/build/configure/src/python.rs#L141
+    return (
+        "manylinux_2_28_x86_64",
+        "manylinux_2_31_aarch64",
+        "macosx_10_13_x86_64",
+        "macosx_11_0_arm64",
+        "win_amd64",
+    )
 
 
 def pip_download(
@@ -64,7 +65,12 @@ def install_libs(
     if not python_versions:
         python_versions = DEFAULT_PYTHON_VERSIONS
     if not platforms:
-        platforms = DEFAULT_PLATFORMS
+        platforms = itertools.chain(
+            *(
+                default_platforms_for_python_version(version)
+                for version in python_versions
+            )
+        )
 
     addon_root = Path(".")
     reqs_path = addon_root / "requirements" / "bundle.txt"
@@ -134,7 +140,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--platforms",
-        default=",".join(DEFAULT_PLATFORMS),
+        default=",".join(
+            (
+                *default_platforms_for_python_version("38"),
+                *default_platforms_for_python_version("39"),
+            )
+        ),
         help="A comma-separated list of platforms to build platform-specific dependencies for (e.g. win_amd64,manylinux_2_28_x86_64)",
     )
 
