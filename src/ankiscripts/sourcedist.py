@@ -5,15 +5,11 @@ import zipfile
 from pathlib import Path
 from shutil import which
 
+from ._utils import read_addon_json
+
 addon_root = Path.cwd()
 build_dir = addon_root / "build"
-addon_json_path = addon_root / "addon.json"
-try:
-    with open(addon_json_path, "r", encoding="utf-8") as file:
-        addon_meta = json.load(file)
-        package = str(addon_meta["package"])
-except FileNotFoundError:
-    package = addon_root.name
+package = read_addon_json(addon_root).get("package") or addon_root.name
 git_exe = which("git")
 
 with tempfile.TemporaryDirectory() as tempdir:

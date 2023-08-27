@@ -6,15 +6,10 @@ import os
 import subprocess
 from pathlib import Path
 
-from ._utils import symlink_addon
+from ._utils import read_addon_json, symlink_addon
 
 addon_root = Path.cwd()
-addon_json_path = addon_root / "addon.json"
-if addon_json_path.exists():
-    with open(addon_json_path, "r", encoding="utf-8") as file:
-        package = json.load(file)["package"]
-else:
-    package = addon_root.name
+package = read_addon_json(addon_root).get("package") or addon_root.name
 symlink_addon(addon_root, package)
 
 env = os.environ.copy()

@@ -11,6 +11,8 @@ from typing import Any, Dict, Iterable, List, Sequence
 
 import jsonschema
 
+from ._utils import read_addon_json
+
 
 def with_fixes_for_qt6(code: str) -> str:
     outlines = []
@@ -131,11 +133,10 @@ class Builder:
         return self.build_dir / name
 
     def _read_addon_json(self) -> Dict[str, Any]:
-        with open(self.root_dir / "addon.json", encoding="utf-8") as file:
-            data = json.load(file)
-            for k, v in self.extra_manifest.items():
-                data[k] = v
-            return data
+        data = read_addon_json(self.root_dir)
+        for k, v in self.extra_manifest.items():
+            data[k] = v
+        return data
 
     def _validate_config(self) -> None:
         instance_path = self.src_dir / "config.json"

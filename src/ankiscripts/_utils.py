@@ -1,10 +1,23 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
+
+def read_addon_json(root_dir: Path) -> dict[str, Any]:
+    try:
+        with open(root_dir / "addon.json", "r", encoding="utf-8") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}
+
+def write_addon_json(root_dir: Path, data: dict[str, Any]) -> None:
+    with open(root_dir / "addon.json", "w", encoding="utf-8") as file:
+        return json.dump(data, file)
 
 def add_exe_suffix(path: str) -> str:
     if sys.platform == "win32":

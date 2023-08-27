@@ -13,7 +13,13 @@ import venv
 from pathlib import Path
 
 from . import support, vendor
-from ._utils import add_exe_suffix, pip_install, symlink_addon
+from ._utils import (
+    add_exe_suffix,
+    pip_install,
+    read_addon_json,
+    symlink_addon,
+    write_addon_json,
+)
 from .update_deps import update_deps
 
 addon_root = Path(".")
@@ -72,9 +78,7 @@ if args.forums:
     support_links["FORUMS_PAGE"] = args.forums
 
 # addon.json
-addon_json_path = addon_root / "addon.json"
-with open(addon_json_path, "r", encoding="utf-8") as file:
-    addon_meta = json.load(file)
+addon_meta = read_addon_json(addon_root)
 addon_meta["name"] = args.name
 addon_meta["package"] = args.package
 if args.ankiweb_id:
@@ -85,8 +89,7 @@ if args.homepage:
     addon_meta["homepage"] = args.homepage
 if args.min_point_version:
     addon_meta["min_point_version"] = args.min_point_version
-with open(addon_json_path, "w", encoding="utf-8") as file:
-    json.dump(addon_meta, file, ensure_ascii=False, indent=4)
+write_addon_json(addon_root, addon_meta)
 
 # pyproject.toml
 pyproject_toml_path = addon_root / "pyproject.toml"
