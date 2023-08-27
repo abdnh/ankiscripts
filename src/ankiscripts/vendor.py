@@ -9,10 +9,28 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
-from ._utils import pip_install
+from ._utils import pip_install, read_addon_json
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
-DEFAULT_PYTHON_VERSIONS = ("38", "39")
+
+addon_root = Path.cwd()
+
+
+def default_python_versions() -> Iterable[str]:
+    addon_meta = read_addon_json(addon_root)
+    min_point_version = int(addon_meta.get("min_point_version", 0))
+    max_point_version = int(addon_meta.get("max_point_version", 999))
+    versions = []
+    if min_point_version < 17:
+        versions.append("36")
+    if min_point_version < 36:
+        versions.append("37")
+    if min_point_version < 50:
+        versions.append("38")
+    if max_point_version >= 50:
+        versions.append("39")
+
+    return versions
 
 
 def default_platforms_for_python_version(version: str) -> tuple[str, ...]:
@@ -63,7 +81,7 @@ def install_libs(
     python_versions: Iterable[str] | None = None, platforms: Iterable[str] | None = None
 ) -> None:
     if not python_versions:
-        python_versions = DEFAULT_PYTHON_VERSIONS
+        python_versions = default_python_versions()
     if not platforms:
         platforms = itertools.chain(
             *(
@@ -135,7 +153,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--python-versions",
-        default=",".join(DEFAULT_PYTHON_VERSIONS),
+        default=",".join(default_python_versions()),
         help="A comma-separated list of Python versions to build platform-specific dependencies for (e.g. 38,39)",
     )
     parser.add_argument(
