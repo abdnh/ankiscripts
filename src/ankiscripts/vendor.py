@@ -116,7 +116,7 @@ def install_libs(
             except Exception:
                 module = package_name
             module_dir = vendor_path / module
-            if not any(module_dir.rglob(g) for g in LIB_EXT_GLOBS):
+            if not any(list(module_dir.rglob(g)) for g in LIB_EXT_GLOBS):
                 continue
             version = dist_info_dir.name.split("-")[1].rsplit(".", maxsplit=1)[0]
             for python_version in python_versions:
