@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from textwrap import dedent
 from typing import Any, Dict, Iterable, List, Sequence
 
 import jsonschema
@@ -218,14 +219,16 @@ class Builder:
                     file.write(for_qt6)
                 with open(outpath.replace(".ui", ".py"), "w", encoding="utf-8") as file:
                     file.write(
-                        f"""\
-    from aqt.qt import qtmajor
+                        dedent(
+                            f"""\
+                            from aqt.qt import qtmajor
 
-    if qtmajor > 5:
-        from .{form.stem}_qt6 import *
-    else:
-        from .{form.stem}_qt5 import *  # type: ignore
-    """
+                            if qtmajor > 5:
+                                from .{form.stem}_qt6 import *
+                            else:
+                                from .{form.stem}_qt5 import *  # type: ignore
+                            """
+                        )
                     )
 
     def _write_consts(self) -> None:
