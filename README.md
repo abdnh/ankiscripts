@@ -37,3 +37,7 @@ This updates dependencies using [pip-tools](https://github.com/jazzband/pip-tool
 ### [sourcedist.py](src/ankiscripts/sourcedist.py)
 
 This creates a sources zip using git-archive and git-bundle.
+
+### [changes.py](src/ankiscripts/changes.py)
+
+Prints relevant changes from CHANGELOG.md given a version string. Used for GitHub release descriptions.
