@@ -221,9 +221,11 @@ class Builder:
                     file.write(
                         dedent(
                             f"""\
+                            from typing import TYPE_CHECKING
+
                             from aqt.qt import qtmajor
 
-                            if qtmajor > 5:
+                            if qtmajor > 5 or TYPE_CHECKING:
                                 from .{form.stem}_qt6 import *
                             else:
                                 from .{form.stem}_qt5 import *  # type: ignore
