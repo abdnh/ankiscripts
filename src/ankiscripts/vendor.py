@@ -96,6 +96,7 @@ def install_libs(
     if reqs_path.exists():
         vendor_path = addon_root / "src" / "vendor"
         vendor_path.mkdir(exist_ok=True)
+        shutil.rmtree(vendor_path)
         bin_path = vendor_path / "bin"
         python_exe = shutil.which("python")
         pip_install(python_exe, str(reqs_path), str(vendor_path))
