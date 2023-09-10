@@ -9,6 +9,11 @@ from pathlib import Path
 
 from ._utils import add_exe_suffix, pip_install
 
+# Work around 'error: invalid object' when run as pre-commit hook
+# https://github.com/jazzband/pip-tools/issues/1359
+if "GIT_INDEX_FILE" in os.environ:
+    del os.environ["GIT_INDEX_FILE"]
+
 pip_compile_args = [
     "--resolver=backtracking",
     "--allow-unsafe",
