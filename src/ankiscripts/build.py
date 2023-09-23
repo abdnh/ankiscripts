@@ -260,7 +260,7 @@ class Builder:
             if str(path) == str(self.src_dir):
                 dirname = ""
             else:
-                dirname = os.path.basename(path)
+                dirname = os.path.relpath(path, self.src_dir)
             names = [os.path.join(dirname, name) for name in names]
             ignored_names = []
             for pattern in patterns:
