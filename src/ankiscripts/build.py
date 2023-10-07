@@ -1,6 +1,5 @@
 import argparse
 import enum
-import fnmatch
 import io
 import json
 import os
@@ -8,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, List
 
 import jsonschema
 
@@ -242,6 +241,15 @@ class Builder:
         with open(self.src_dir / "consts.py", "w", encoding="utf-8") as file:
             file.write(s)
 
+    def _copy_package(self) -> None:
+        for dirpath, _, filenames in os.walk(self.src_dir):
+            for filename in filenames:
+                src_path = Path(dirpath) / filename
+                if not any(src_path.match(pattern) for pattern in self.excludes):
+                    dst_path = self.dist_dir / src_path.relative_to(self.src_dir)
+                    dst_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_path, dst_path)
+
     def _copy_additional_files(self) -> None:
         for pattern in self.copy_patterns:
             for path in self.root_dir.glob(pattern):
@@ -252,23 +260,6 @@ class Builder:
                 else:
                     with open(path, "r", encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
-
-    def _ignore_patterns(self, *patterns: str):
-        """Like shutil.ignore_patterns except that patterns are assumed to be relative to the source directory."""
-
-        def inner_ignore_patterns(path: str, names: Sequence[str]) -> Iterable[str]:
-            if str(path) == str(self.src_dir):
-                dirname = ""
-            else:
-                dirname = os.path.relpath(path, self.src_dir)
-            names = [os.path.join(dirname, name) for name in names]
-            ignored_names = []
-            for pattern in patterns:
-                ignored_names.extend(fnmatch.filter(names, pattern))
-            ignored_names = [os.path.relpath(name, dirname) for name in ignored_names]
-            return set(ignored_names)
-
-        return inner_ignore_patterns
 
     def build(self) -> None:
         self._validate_config()
@@ -284,9 +275,7 @@ class Builder:
         self._write_manifest()
         self._generate_forms()
         self._write_consts()
-        shutil.copytree(
-            self.src_dir, self.dist_dir, ignore=self._ignore_patterns(*self.excludes)
-        )
+        self._copy_package()
         self._copy_additional_files()
         self.package_path.unlink(missing_ok=True)
         subprocess.check_call(
