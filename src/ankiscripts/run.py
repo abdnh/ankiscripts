@@ -17,6 +17,8 @@ env = os.environ.copy()
 env["DEBUG"] = "1"
 # For debugging webviews (https://addon-docs.ankiweb.net/debugging.html#webviews)
 env["QTWEBENGINE_REMOTE_DEBUGGING"] = "8080"
+# https://github.com/ankitects/anki/commit/db031424c28ecbb84ae7f30564719aca0c07a354
+env["QTWEBENGINE_CHROMIUM_FLAGS"] = "--remote-allow-origins=http://localhost:8080"
 # Set static port to access pages served over localhost
 env["ANKI_API_PORT"] = "40000"
 # Logging
