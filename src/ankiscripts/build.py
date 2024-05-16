@@ -241,6 +241,16 @@ class Builder:
         with open(self.src_dir / "consts.py", "w", encoding="utf-8") as file:
             file.write(s)
 
+    def _write_version(self) -> None:
+        try:
+            version = subprocess.check_output(["git", "describe", "--tags"]).decode(
+                "utf-8"
+            )
+        except subprocess.CalledProcessError:
+            return
+        with open(self.src_dir / ".version", "w", encoding="utf-8") as file:
+            file.write(version)
+
     def _copy_package(self) -> None:
         for dirpath, _, filenames in os.walk(self.src_dir):
             for filename in filenames:
@@ -275,6 +285,7 @@ class Builder:
         self._write_manifest()
         self._generate_forms()
         self._write_consts()
+        self._write_version()
         self._copy_package()
         self._copy_additional_files()
         self.package_path.unlink(missing_ok=True)
