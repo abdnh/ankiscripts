@@ -1,7 +1,7 @@
 """
 This script runs Anki with the base folder `ankidata` in the current directory and some useful env variables set for debugging.
 """
-import json
+
 import os
 import subprocess
 from pathlib import Path
@@ -27,4 +27,7 @@ env["ANKIDEV"] = "1"
 env["DISABLE_QT5_COMPAT"] = "1"
 # Print SQL statements
 # env["TRACESQL"] = "1"
+# Sentry
+env["SENTRY_ENVIRONMENT"] = "development"
+
 subprocess.check_call(["anki", "-b", "ankidata"], env=env)
