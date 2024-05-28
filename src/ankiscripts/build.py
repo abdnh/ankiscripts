@@ -117,7 +117,7 @@ class Builder:
         self.should_write_consts = bool(args.consts)
         self.package_path = Path(args.out) if args.out else self._get_package_path()
         self.excludes: List[str] = list(args.exclude) if args.exclude else []
-        self.excludes.extend(["meta.json", "py.typed"])
+        self.excludes.extend(["meta.json", "py.typed", ".version"])
         self.copy_patterns = ["README.md", "LICENSE*", "CHANGELOG.md"]
         if args.copy:
             self.copy_patterns.extend(args.copy.split())
@@ -248,7 +248,7 @@ class Builder:
             )
         except subprocess.CalledProcessError:
             return
-        with open(self.src_dir / ".version", "w", encoding="utf-8") as file:
+        with open(self.dist_dir / ".version", "w", encoding="utf-8") as file:
             file.write(version)
 
     def _copy_package(self) -> None:
@@ -275,6 +275,7 @@ class Builder:
         self._validate_config()
         if self.dist_dir.is_dir():
             shutil.rmtree(self.dist_dir)
+        self.dist_dir.mkdir(exist_ok=True)
         to_remove = {"**/__pycache__"}
         for pattern in to_remove:
             for path in self.src_dir.glob(pattern):
