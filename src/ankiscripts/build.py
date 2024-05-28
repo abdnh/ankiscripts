@@ -275,7 +275,7 @@ class Builder:
         self._validate_config()
         if self.dist_dir.is_dir():
             shutil.rmtree(self.dist_dir)
-        self.dist_dir.mkdir(exist_ok=True)
+        self.dist_dir.mkdir(exist_ok=True, parents=True)
         to_remove = {"**/__pycache__"}
         for pattern in to_remove:
             for path in self.src_dir.glob(pattern):
