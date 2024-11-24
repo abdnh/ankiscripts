@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,9 +16,11 @@ def read_addon_json(root_dir: Path) -> dict[str, Any]:
     except FileNotFoundError:
         return {}
 
+
 def write_addon_json(root_dir: Path, data: dict[str, Any]) -> None:
     with open(root_dir / "addon.json", "w", encoding="utf-8") as file:
         return json.dump(data, file)
+
 
 def add_exe_suffix(path: str) -> str:
     if sys.platform == "win32":
@@ -59,3 +62,15 @@ def symlink_addon(addon_root: Path, addon_package: str) -> None:
             )
         else:
             os.link(src_path, install_path)
+
+
+def run_bash_script(path: Path) -> int:
+    wsl_exe = shutil.which("wsl")
+    if wsl_exe:
+        return subprocess.check_call(
+            [wsl_exe, "--", "bash", f"$(wslpath {path.as_posix()})"]
+        )
+
+    bash_exe = shutil.which("bash")
+    # Seems like Bash on Windows expects POSIX paths
+    return subprocess.check_call([bash_exe, str(path.as_posix())])

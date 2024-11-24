@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 
 import jsonschema
 
-from ._utils import read_addon_json
+from ._utils import read_addon_json, run_bash_script
 
 
 def with_fixes_for_qt6(code: str) -> str:
@@ -271,6 +271,12 @@ class Builder:
                     with open(path, "r", encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
 
+    def _run_custom_build_script(self) -> None:
+        # Additional build logic can be specified in scripts/build.sh
+        build_script_path = self.root_dir / "scripts" / "build.sh"
+        if build_script_path.exists():
+            run_bash_script(build_script_path)
+
     def build(self) -> None:
         self._validate_config()
         if self.dist_dir.is_dir():
@@ -289,6 +295,7 @@ class Builder:
         self._write_version()
         self._copy_package()
         self._copy_additional_files()
+        self._run_custom_build_script()
         self.package_path.unlink(missing_ok=True)
         subprocess.check_call(
             [

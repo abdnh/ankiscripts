@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
-from ._utils import pip_install, read_addon_json
+from ._utils import pip_install, read_addon_json, run_bash_script
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 
@@ -146,10 +146,8 @@ def install_libs(
 
     # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.sh
     vendor_script_path = addon_root / "scripts" / "vendor.sh"
-    bash_exe = shutil.which("bash")
     if vendor_script_path.exists():
-        # Seems like Bash on Windows expects POSIX paths
-        subprocess.check_call([bash_exe, str(vendor_script_path.as_posix())])
+        run_bash_script(vendor_script_path)
 
 
 if __name__ == "__main__":
