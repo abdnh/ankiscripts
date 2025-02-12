@@ -16,7 +16,7 @@ dynamic = ["version"]
 dependencies = ["jsonschema>=4,<5", "questionary>=2,<3"]
 
 [project.optional-dependencies]
-dev = ["mypy", "pylint", "black", "isort"]
+dev = ["mypy", "pylint", "black", "isort", "aqt"]
 qt5 = ["pyqt5"]
 qt6 = ["pyqt6"]
 forms = ["pyqt6"]

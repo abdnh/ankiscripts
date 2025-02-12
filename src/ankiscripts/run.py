@@ -1,10 +1,11 @@
 """
-This script runs Anki with the base folder `ankidata` in the current directory and some useful env variables set for debugging.
+This script runs Anki with some useful env variables set for debugging. Anki arguments can be passed.
 """
 
 import os
-import subprocess
 from pathlib import Path
+
+import aqt
 
 from ._utils import read_addon_json, symlink_addon
 
@@ -12,7 +13,7 @@ addon_root = Path.cwd()
 package = read_addon_json(addon_root).get("package") or addon_root.name
 symlink_addon(addon_root, package)
 
-env = os.environ.copy()
+env = os.environ
 # Run debugger on uncaught exceptions (https://addon-docs.ankiweb.net/debugging.html#pdb)
 env["DEBUG"] = "1"
 # For debugging webviews (https://addon-docs.ankiweb.net/debugging.html#webviews)
@@ -30,4 +31,4 @@ env["DISABLE_QT5_COMPAT"] = "1"
 # Sentry
 env["SENTRY_ENVIRONMENT"] = "development"
 
-subprocess.check_call(["anki", "-b", "ankidata"], env=env)
+aqt.run()
