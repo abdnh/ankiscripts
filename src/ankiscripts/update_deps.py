@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -25,16 +26,31 @@ pip_compile_args = [
 def compile_requirements(
     pip_compile_exe: str, req_type: str, package: str = "all"
 ) -> None:
-    requirements_filename = f"requirements/{req_type}.in"
-    if os.path.exists(requirements_filename):
+    requirements_in_path = Path(f"requirements/{req_type}.in")
+    if requirements_in_path.exists():
         args = pip_compile_args.copy()
         if package == "all":
             args.append("--upgrade")
         else:
             args.extend(["--upgrade-package", package])
-        with open(requirements_filename, "r", encoding="utf-8") as file:
+        with open(requirements_in_path, "r", encoding="utf-8") as file:
             if file.read().strip():
-                subprocess.check_call([pip_compile_exe, *args, requirements_filename])
+                subprocess.check_call(
+                    [pip_compile_exe, *args, str(requirements_in_path)]
+                )
+                requirements_txt_path = requirements_in_path.with_suffix(".txt")
+                requirements_txt_contents = requirements_txt_path.read_text(
+                    encoding="utf-8"
+                )
+                # Work around pip-tools writing absolute paths: https://github.com/jazzband/pip-tools/issues/2131
+                requirements_txt_contents = re.sub(
+                    f"{re.escape(str(requirements_txt_path.parent.parent.absolute()))}(\\\\|/)",
+                    "",
+                    requirements_txt_contents,
+                )
+                requirements_txt_path.write_text(
+                    requirements_txt_contents, encoding="utf-8"
+                )
 
 
 def update_deps(
