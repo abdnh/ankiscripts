@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
-from ._utils import pip_install, read_addon_json, run_bash_script
+from ._utils import pip_install, read_addon_json, run_script
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 
@@ -144,10 +144,14 @@ def install_libs(
                             dst.parent.mkdir(parents=True, exist_ok=True)
                             shutil.copy(p, dst)
 
-    # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.sh
-    vendor_script_path = addon_root / "scripts" / "vendor.sh"
+    # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.(sh|ps1)
+    scripts_dir = addon_root / "scripts"
+    if sys.platform == "win32" and (scripts_dir / "vendor.ps1").exists():
+        vendor_script_path = scripts_dir / "vendor.ps1"
+    else:
+        vendor_script_path = addon_root / "scripts" / "vendor.sh"
     if vendor_script_path.exists():
-        run_bash_script(vendor_script_path)
+        run_script(vendor_script_path)
 
 
 if __name__ == "__main__":

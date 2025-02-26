@@ -74,3 +74,14 @@ def run_bash_script(path: Path) -> int:
     bash_exe = shutil.which("bash")
     # Seems like Bash on Windows expects POSIX paths
     return subprocess.check_call([bash_exe, str(path.as_posix())])
+
+
+def run_powershell_script(path: Path) -> int:
+    powershell_exe = shutil.which("powershell")
+    return subprocess.check_call([powershell_exe, "-File", str(path)])
+
+
+def run_script(path: Path) -> int:
+    if path.suffix == ".ps1":
+        return run_powershell_script(path)
+    return run_bash_script(path)
