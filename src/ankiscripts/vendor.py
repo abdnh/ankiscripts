@@ -134,6 +134,14 @@ def install_libs(
                 for wheel_path in build_dir.glob(
                     f"{package_name}-{version}-cp{python_version}-*.whl"
                 ):
+                    should_copy = True
+                    for platform in platforms:
+                        os, *_, arch = platform.split("_")
+                        if os not in wheel_path.name or arch not in wheel_path.name:
+                            should_copy = False
+                            break
+                    if not should_copy:
+                        continue
                     wheel_dir = build_dir / wheel_path.stem
                     wheel_dir.mkdir(exist_ok=True)
                     with zipfile.ZipFile(wheel_path, "r") as file:
