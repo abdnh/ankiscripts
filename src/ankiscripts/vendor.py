@@ -154,12 +154,7 @@ def install_libs(
 
     # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.(sh|ps1)
     scripts_dir = addon_root / "scripts"
-    if sys.platform == "win32" and (scripts_dir / "vendor.ps1").exists():
-        vendor_script_path = scripts_dir / "vendor.ps1"
-    else:
-        vendor_script_path = addon_root / "scripts" / "vendor.sh"
-    if vendor_script_path.exists():
-        run_script(vendor_script_path)
+    run_script(scripts_dir, "vendor")
 
 
 if __name__ == "__main__":
