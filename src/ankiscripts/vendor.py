@@ -137,6 +137,8 @@ def install_libs(
                     should_copy = False
                     for platform in platforms:
                         os, *_, arch = platform.split("_")
+                        if arch == "64":
+                            arch = "x86_64"
                         if os in wheel_path.name and arch in wheel_path.name:
                             should_copy = True
                             break
