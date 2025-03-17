@@ -32,7 +32,7 @@ This installs libraries in requirements/bundle.txt (if found) to src/vendor. It 
 
 ### [update_deps.py](src/ankiscripts/update_deps.py)
 
-This updates dependencies using [pip-tools](https://github.com/jazzband/pip-tools).
+This updates dependencies using [uv's pip interface](https://docs.astral.sh/uv/pip/compatibility/).
 
 ### [sourcedist.py](src/ankiscripts/sourcedist.py)
 
