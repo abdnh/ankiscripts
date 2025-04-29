@@ -22,31 +22,18 @@ def write_addon_json(root_dir: Path, data: dict[str, Any]) -> None:
         return json.dump(data, file)
 
 
-def add_exe_suffix(path: str) -> str:
-    if sys.platform == "win32":
-        path = path + ".exe"
-    return path
+def uv(*args: Any) -> str:
+    return subprocess.check_output([shutil.which("uv"), *args], encoding="utf-8")
 
 
-def pip_install(python_exe: str, reqs_filename: str, target: str | None = None) -> None:
+def pip_install(reqs_filename: str, target: str | None = None) -> None:
     with open(reqs_filename, "r", encoding="utf-8") as file:
         if not file.read().strip():
             return
     target_args = []
     if target:
         target_args.extend(["--target", target])
-    subprocess.check_call(
-        [
-            python_exe,
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            "-r",
-            reqs_filename,
-            *target_args,
-        ]
-    )
+    uv("pip", "install", "--upgrade", "-r", reqs_filename, *target_args)
 
 
 def symlink_addon(addon_root: Path, addon_package: str) -> None:

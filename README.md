@@ -30,10 +30,6 @@ This script takes a path to an add-on and compares it with the template, offerin
 
 This installs libraries in requirements/bundle.txt (if found) to src/vendor. It has experimental support for handling dependencies with C modules by downloading platform-specific wheels and copying library files to the vendor folder.
 
-### [update_deps.py](src/ankiscripts/update_deps.py)
-
-This updates dependencies using [uv's pip interface](https://docs.astral.sh/uv/pip/compatibility/).
-
 ### [sourcedist.py](src/ankiscripts/sourcedist.py)
 
 This creates a sources zip using git-archive and git-bundle.

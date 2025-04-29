@@ -3,24 +3,12 @@ Initializes a new add-on using my add-on template.
 """
 
 import argparse
-import json
-import os
 import re
 import shutil
-import subprocess
-import types
-import venv
 from pathlib import Path
 
 from . import support, vendor
-from ._utils import (
-    add_exe_suffix,
-    pip_install,
-    read_addon_json,
-    symlink_addon,
-    write_addon_json,
-)
-from .update_deps import update_deps
+from ._utils import read_addon_json, symlink_addon, uv, write_addon_json
 
 addon_root = Path(".")
 
@@ -120,26 +108,10 @@ ankiweb_page_path.write_text(ankiweb_readme, encoding="utf-8")
 # Symlinking
 symlink_addon(addon_root, args.package)
 
-# Create venv and install deps
-
-
-class MyEnvBuilder(venv.EnvBuilder):
-    def post_setup(self, context: types.SimpleNamespace) -> None:
-        update_deps(context.bin_path)
-        precommit_exe = add_exe_suffix(os.path.join(context.bin_path, "pre-commit"))
-        subprocess.check_call(
-            [
-                precommit_exe,
-                "install",
-            ]
-        )
-        vendor.install_libs()
-        return super().post_setup(context)
-
-
-venv_path = addon_root / "venv"
-env_builder = MyEnvBuilder(with_pip=True, clear=True)
-env_builder.create(venv_path)
+# Set up virtual environment and install dependencies
+uv("sync")
+uv("run", "--", "pre-commit", "install")
+vendor.install_libs()
 
 # Copy VS Code settings
 vsode_dist = addon_root / ".vscode.dist"

@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
-from ._utils import pip_install, read_addon_json, run_script
+from ._utils import pip_install, read_addon_json, run_script, uv
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 
@@ -92,73 +92,79 @@ def install_libs(
         )
 
     addon_root = Path(".")
-    reqs_path = addon_root / "requirements" / "bundle.txt"
-    if reqs_path.exists():
-        vendor_path = addon_root / "src" / "vendor"
-        vendor_path.mkdir(exist_ok=True)
-        shutil.rmtree(vendor_path)
-        bin_path = vendor_path / "bin"
-        python_exe = shutil.which("python")
-        pip_install(python_exe, str(reqs_path), str(vendor_path))
-        if bin_path.exists():
-            shutil.rmtree(bin_path)
 
-        # Handle dependencies with C modules by downloading wheels for all supported platforms and copying C libraries from them
-        build_dir = addon_root / "build"
-        build_dir.mkdir(exist_ok=True)
-        for dist_info_dir in vendor_path.iterdir():
-            if not dist_info_dir.is_dir() or not dist_info_dir.match("*.dist-info"):
-                continue
-            package_name = dist_info_dir.name.split("-")[0]
-            try:
-                with open(
-                    dist_info_dir / "top_level.txt", "r", encoding="utf-8"
-                ) as file:
-                    module = file.read().strip()
-            except Exception:
-                module = package_name
-            module_dir = vendor_path / module
-            if module == "ankiutils":
-                # Treat our ankiutils package specially and move it to source directory
-                # to avoid compatibility issues with when multiple add-ons vendor different versions of the package
-                # as it gets frequent updates
-                module_dir.rename(addon_root / "src" / "ankiutils")
-                continue
-            if not any(list(module_dir.rglob(g)) for g in LIB_EXT_GLOBS):
-                continue
-            version = dist_info_dir.name.split("-")[1].rsplit(".", maxsplit=1)[0]
-            for python_version in python_versions:
+    reqs_path = addon_root / ".reqs.txt"
+    reqs_path.write_text(
+        uv("export", "--no-dev", "--no-editable", "--no-emit-project"), encoding="utf-8"
+    )
+    vendor_path = addon_root / "src" / "vendor"
+    vendor_path.mkdir(exist_ok=True)
+    shutil.rmtree(vendor_path)
+    python_exe = shutil.which("python")
+    pip_install(str(reqs_path), str(vendor_path))
+    reqs_path.unlink()
+    bin_path = vendor_path / "bin"
+    if bin_path.exists():
+        shutil.rmtree(bin_path)
+
+    # Handle dependencies with C modules by downloading wheels for all supported platforms and copying C libraries from them
+    build_dir = addon_root / "build"
+    build_dir.mkdir(exist_ok=True)
+    for dist_info_dir in vendor_path.iterdir():
+        if not dist_info_dir.is_dir() or not dist_info_dir.match("*.dist-info"):
+            continue
+        package_name = dist_info_dir.name.split("-")[0]
+        try:
+            with open(dist_info_dir / "top_level.txt", "r", encoding="utf-8") as file:
+                module = file.read().strip()
+        except Exception:
+            module = package_name
+        module_dir = vendor_path / module
+        if module == "ankiutils":
+            # Treat our ankiutils package specially and move it to source directory
+            # to avoid compatibility issues with when multiple add-ons vendor different versions of the package
+            # as it gets frequent updates
+            ankiutils_path = addon_root / "src" / "ankiutils"
+            shutil.rmtree(
+                ankiutils_path,
+            )
+            module_dir.rename(ankiutils_path)
+            continue
+        if not any(list(module_dir.rglob(g)) for g in LIB_EXT_GLOBS):
+            continue
+        version = dist_info_dir.name.split("-")[1].rsplit(".", maxsplit=1)[0]
+        for python_version in python_versions:
+            for platform in platforms:
+                pip_download(
+                    python_exe,
+                    package_name,
+                    version,
+                    python_version,
+                    platform,
+                    str(build_dir),
+                )
+            for wheel_path in build_dir.glob(
+                f"{package_name}-{version}-cp{python_version}-*.whl"
+            ):
+                should_copy = False
                 for platform in platforms:
-                    pip_download(
-                        python_exe,
-                        package_name,
-                        version,
-                        python_version,
-                        platform,
-                        str(build_dir),
-                    )
-                for wheel_path in build_dir.glob(
-                    f"{package_name}-{version}-cp{python_version}-*.whl"
-                ):
-                    should_copy = False
-                    for platform in platforms:
-                        os, *_, arch = platform.split("_")
-                        if arch == "64":
-                            arch = "x86_64"
-                        if os in wheel_path.name and arch in wheel_path.name:
-                            should_copy = True
-                            break
-                    if not should_copy:
-                        continue
-                    wheel_dir = build_dir / wheel_path.stem
-                    wheel_dir.mkdir(exist_ok=True)
-                    with zipfile.ZipFile(wheel_path, "r") as file:
-                        file.extractall(wheel_dir)
-                    for p in (wheel_dir / module).rglob("*"):
-                        if any(p.match(g) for g in LIB_EXT_GLOBS):
-                            dst = module_dir / p.relative_to(wheel_dir / module)
-                            dst.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy(p, dst)
+                    os, *_, arch = platform.split("_")
+                    if arch == "64":
+                        arch = "x86_64"
+                    if os in wheel_path.name and arch in wheel_path.name:
+                        should_copy = True
+                        break
+                if not should_copy:
+                    continue
+                wheel_dir = build_dir / wheel_path.stem
+                wheel_dir.mkdir(exist_ok=True)
+                with zipfile.ZipFile(wheel_path, "r") as file:
+                    file.extractall(wheel_dir)
+                for p in (wheel_dir / module).rglob("*"):
+                    if any(p.match(g) for g in LIB_EXT_GLOBS):
+                        dst = module_dir / p.relative_to(wheel_dir / module)
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy(p, dst)
 
     # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.(sh|ps1)
     scripts_dir = addon_root / "scripts"
