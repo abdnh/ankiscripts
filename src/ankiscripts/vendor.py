@@ -125,9 +125,10 @@ def install_libs(
             # to avoid compatibility issues with when multiple add-ons vendor different versions of the package
             # as it gets frequent updates
             ankiutils_path = addon_root / "src" / "ankiutils"
-            shutil.rmtree(
-                ankiutils_path,
-            )
+            if ankiutils_path.exists():
+                shutil.rmtree(
+                    ankiutils_path,
+                )
             module_dir.rename(ankiutils_path)
             continue
         if not any(list(module_dir.rglob(g)) for g in LIB_EXT_GLOBS):
