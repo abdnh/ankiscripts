@@ -97,13 +97,15 @@ def compare(a: str | Path, b: str | Path) -> None:
                 lines1 = file.readlines()
             with open((addon_root / path), "r", encoding="utf-8") as file:
                 lines2 = file.readlines()
-            diff_path = addon_root / path.with_suffix(f"{path.suffix}.diff")
-            with open(diff_path, "w", encoding="utf-8") as file:
-                file.writelines(
-                    difflib.unified_diff(
-                        lines1, lines2, f"template/{path}", f"{addon_root.name}/{path}"
+            diff_lines = list(difflib.unified_diff(
+                lines1, lines2, f"template/{path}", f"{addon_root.name}/{path}"
+            ))
+            if diff_lines:
+                diff_path = addon_root / path.with_suffix(f"{path.suffix}.diff")
+                with open(diff_path, "w", encoding="utf-8") as file:
+                    file.writelines(
+                        diff_lines
                     )
-                )
 
 
 if __name__ == "__main__":
