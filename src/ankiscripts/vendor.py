@@ -41,8 +41,8 @@ def default_platforms_for_python_version(version: str) -> tuple[str, ...]:
         "manylinux_2_35_x86_64",
         "manylinux_2_35_aarch64",
         # FIXME: the following two are conflicting
-        "macosx_12_0_x86_64",
-        # "macosx_12_0_arm64",
+        # "macosx_12_0_x86_64",
+        "macosx_12_0_arm64",
         "win_amd64",
     )
 
