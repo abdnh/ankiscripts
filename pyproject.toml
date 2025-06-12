@@ -13,7 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dynamic = ["version"]
-dependencies = ["jsonschema>=4,<5", "questionary>=2,<3"]
+dependencies = ["jsonschema>=4,<5", "questionary>=2,<3", "pip"]
 
 [project.optional-dependencies]
 dev = ["mypy", "pylint", "black", "isort", "aqt"]
