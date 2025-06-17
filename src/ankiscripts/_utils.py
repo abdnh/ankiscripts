@@ -33,7 +33,16 @@ def pip_install(reqs_filename: str, target: str | None = None) -> None:
     target_args = []
     if target:
         target_args.extend(["--target", target])
-    uv("pip", "install", "--upgrade", "-r", reqs_filename, *target_args)
+    uv(
+        "pip",
+        "install",
+        "--upgrade",
+        "-r",
+        reqs_filename,
+        "--link-mode",
+        "copy",
+        *target_args,
+    )
 
 
 def symlink_addon(addon_root: Path, addon_package: str) -> None:

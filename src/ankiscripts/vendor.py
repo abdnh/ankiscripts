@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import itertools
 import shutil
 import subprocess
@@ -9,11 +10,121 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
+import astor
+
 from ._utils import pip_install, read_addon_json, run_script, uv
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 
 addon_root = Path.cwd()
+
+
+class ImportRewriter(ast.NodeTransformer):
+    """AST transformer to rewrite absolute imports to relative imports for vendored packages."""
+
+    def __init__(
+        self, vendored_packages: set[str], current_file_path: Path, vendor_path: Path
+    ):
+        self.vendored_packages = vendored_packages
+        self.current_file_path = current_file_path
+        self.vendor_path = vendor_path
+
+    def _get_relative_import_level(self) -> int:
+        """Calculate the number of dots needed for relative import."""
+        try:
+            # Get relative path from current file to vendor directory
+            rel_path = self.current_file_path.relative_to(self.vendor_path)
+            # Number of parent directories to go up
+            return len(rel_path.parts) - 1  # -1 because file itself doesn't count
+        except ValueError:
+            # File is outside vendor directory
+            return 0
+
+    def visit_Import(self, node: ast.Import) -> ast.Import:
+        """Rewrite 'import package' to 'from .vendor import package' for vendored packages."""
+        new_aliases = []
+
+        for alias in node.names:
+            package_name = alias.name.split(".")[0]
+            if package_name in self.vendored_packages:
+                # Skip this import, it will be handled by converting to ImportFrom
+                continue
+            else:
+                new_aliases.append(alias)
+
+        # If we filtered out some imports, return the node with remaining imports
+        # The vendored imports will be converted in a separate pass or handled differently
+        if new_aliases:
+            return ast.Import(names=new_aliases)
+        else:
+            # All imports were vendored, remove this node
+            return None
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.ImportFrom:
+        """Rewrite 'from package import x' to use relative imports within vendor directory."""
+        if node.module:
+            package_name, *rest = node.module.split(".")
+            if package_name == "vendor":
+                package_name = rest[0]
+            if package_name in self.vendored_packages:
+                level = self._get_relative_import_level()
+                if level == 0:
+                    # File is outside vendor directory, use relative import from src/
+                    new_module = f"vendor.{node.module}"
+                    return ast.ImportFrom(module=new_module, names=node.names, level=1)
+                else:
+                    # File is inside vendor directory, use relative import within vendor
+                    # Just use the original module name with appropriate level
+                    return ast.ImportFrom(
+                        module=node.module, names=node.names, level=level + 1
+                    )
+
+        return node
+
+
+def rewrite_imports_in_file(
+    file_path: Path, vendored_packages: set[str], vendor_path: Path
+) -> None:
+    """Rewrite imports in a single Python file using AST transformation."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        tree = ast.parse(content, filename=str(file_path))
+        rewriter = ImportRewriter(vendored_packages, file_path, vendor_path)
+        new_tree = rewriter.visit(tree)
+        new_content = astor.to_source(new_tree)
+        if new_content != content:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+
+    except (SyntaxError, UnicodeDecodeError) as e:
+        print(
+            f"Warning: Could not rewrite imports in {file_path}: {e}", file=sys.stderr
+        )
+
+
+def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
+    """Rewrite imports in all Python files within the vendor directory."""
+    vendored_packages = set()
+
+    for item in vendor_path.iterdir():
+        if (
+            item.is_dir()
+            and not item.name.endswith(".dist-info")
+            and not item.name.endswith(".egg-info")
+        ):
+            vendored_packages.add(item.name)
+
+    print(f"Found vendored packages: {', '.join(sorted(vendored_packages))}")
+
+    python_files = list(vendor_path.rglob("*.py"))
+    print(f"Rewriting imports in {len(python_files)} Python files...")
+
+    for py_file in python_files:
+        rewrite_imports_in_file(py_file, vendored_packages, vendor_path)
+
+    print("Import rewriting completed.")
 
 
 def default_python_versions() -> Iterable[str]:
@@ -95,7 +206,8 @@ def install_libs(
 
     reqs_path = addon_root / ".reqs.txt"
     reqs_path.write_text(
-        uv("export", "--no-dev", "--no-editable", "--no-emit-project"), encoding="utf-8"
+        uv("export", "--no-dev", "--no-editable", "--no-emit-project"),
+        encoding="utf-8",
     )
     vendor_path = addon_root / "src" / "vendor"
     vendor_path.mkdir(exist_ok=True)
@@ -120,17 +232,17 @@ def install_libs(
         except Exception:
             module = package_name
         module_dir = vendor_path / module
-        if module == "ankiutils":
-            # Treat our ankiutils package specially and move it to source directory
-            # to avoid compatibility issues with when multiple add-ons vendor different versions of the package
-            # as it gets frequent updates
-            ankiutils_path = addon_root / "src" / "ankiutils"
-            if ankiutils_path.exists():
-                shutil.rmtree(
-                    ankiutils_path,
-                )
-            module_dir.rename(ankiutils_path)
-            continue
+        # if module == "ankiutils":
+        #     # Treat our ankiutils package specially and move it to source directory
+        #     # to avoid compatibility issues with when multiple add-ons vendor different versions of the package
+        #     # as it gets frequent updates
+        #     ankiutils_path = addon_root / "src" / "ankiutils"
+        #     if ankiutils_path.exists():
+        #         shutil.rmtree(
+        #             ankiutils_path,
+        #         )
+        #     module_dir.rename(ankiutils_path)
+        #     continue
         if not any(list(module_dir.rglob(g)) for g in LIB_EXT_GLOBS):
             continue
         version = dist_info_dir.name.split("-")[1].rsplit(".", maxsplit=1)[0]
@@ -166,6 +278,9 @@ def install_libs(
                         dst = module_dir / p.relative_to(wheel_dir / module)
                         dst.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy(p, dst)
+
+    # Rewrite imports in vendored packages to be relative to the vendor directory
+    rewrite_imports_in_vendor_dir(vendor_path)
 
     # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.(sh|ps1)
     scripts_dir = addon_root / "scripts"
