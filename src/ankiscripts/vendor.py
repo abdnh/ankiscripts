@@ -40,24 +40,105 @@ class ImportRewriter(ast.NodeTransformer):
             # File is outside vendor directory
             return 0
 
-    def visit_Import(self, node: ast.Import) -> ast.Import:
-        """Rewrite 'import package' to 'from .vendor import package' for vendored packages."""
+    def visit_Import(self, node: ast.Import) -> ast.Import | ast.ImportFrom | list:
+        """Rewrite 'import package' to relative imports for vendored packages."""
         new_aliases = []
+        vendored_imports = []
 
         for alias in node.names:
             package_name = alias.name.split(".")[0]
             if package_name in self.vendored_packages:
-                # Skip this import, it will be handled by converting to ImportFrom
-                continue
+                vendored_imports.append(alias)
             else:
                 new_aliases.append(alias)
 
-        # If we filtered out some imports, return the node with remaining imports
-        # The vendored imports will be converted in a separate pass or handled differently
+        # Create nodes for the different types of imports
+        nodes: list[ast.Import | ast.ImportFrom] = []
+
+        # Add non-vendored imports
         if new_aliases:
-            return ast.Import(names=new_aliases)
+            nodes.append(ast.Import(names=new_aliases))
+
+        # Add vendored imports as ImportFrom statements
+        for alias in vendored_imports:
+            level = self._get_relative_import_level()
+            if level == 0:
+                # File is outside vendor directory, import from vendor
+                nodes.append(
+                    ast.ImportFrom(
+                        module="vendor",
+                        names=[ast.alias(name=alias.name, asname=alias.asname)],
+                        level=1,
+                    )
+                )
+            else:
+                # File is inside vendor directory, use relative import
+                package_name = alias.name.split(".")[0]
+                try:
+                    current_package = self.current_file_path.parent.name
+                    if package_name == current_package:
+                        # Importing from same package, use level=1
+                        if "." in alias.name:
+                            # Submodule import: "import sentry_sdk.utils" -> "from . import utils"
+                            submodule = alias.name.split(".")[-1]
+                            nodes.append(
+                                ast.ImportFrom(
+                                    module="",
+                                    names=[
+                                        ast.alias(name=submodule, asname=alias.asname)
+                                    ],
+                                    level=1,
+                                )
+                            )
+                        else:
+                            # Simple package import from within same package: "import sentry_sdk" in sentry_sdk/utils.py
+                            # Convert to relative import: "import sentry_sdk" -> "from .. import sentry_sdk"
+                            nodes.append(
+                                ast.ImportFrom(
+                                    module="",
+                                    names=[
+                                        ast.alias(
+                                            name=package_name, asname=alias.asname
+                                        )
+                                    ],
+                                    level=level + 1,
+                                )
+                            )
+                    else:
+                        # Importing from different package, use original logic
+                        nodes.append(
+                            ast.ImportFrom(
+                                module="",
+                                names=[
+                                    ast.alias(
+                                        name=alias.name.split(".")[-1],
+                                        asname=alias.asname,
+                                    )
+                                ],
+                                level=level + 1,
+                            )
+                        )
+                except (AttributeError, IndexError):
+                    # Fallback to original logic if path parsing fails
+                    nodes.append(
+                        ast.ImportFrom(
+                            module="",
+                            names=[
+                                ast.alias(
+                                    name=alias.name.split(".")[-1], asname=alias.asname
+                                )
+                            ],
+                            level=level + 1,
+                        )
+                    )
+
+        # Return single node or list of nodes
+        if len(nodes) == 1:
+            return nodes[0]
+        elif len(nodes) > 1:
+            return nodes
         else:
-            # All imports were vendored, remove this node
+            # All imports were removed, return None
             return None
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.ImportFrom:
@@ -74,10 +155,35 @@ class ImportRewriter(ast.NodeTransformer):
                     return ast.ImportFrom(module=new_module, names=node.names, level=1)
                 else:
                     # File is inside vendor directory, use relative import within vendor
-                    # Just use the original module name with appropriate level
-                    return ast.ImportFrom(
-                        module=node.module, names=node.names, level=level + 1
-                    )
+                    # Check if we're importing from the same package
+                    try:
+                        current_package = self.current_file_path.parent.name
+                        if package_name == current_package:
+                            # Importing from same package, need to determine the correct relative import
+                            if node.module == package_name:
+                                # Direct import from package: "from sentry_sdk import utils" -> "from . import utils"
+                                return ast.ImportFrom(
+                                    module=None, names=node.names, level=1
+                                )
+                            else:
+                                # Submodule import: "from sentry_sdk.utils import AnnotatedValue" -> "from .utils import AnnotatedValue"
+                                # Remove the package prefix and use relative import
+                                submodule = node.module[
+                                    len(package_name) + 1 :
+                                ]  # +1 for the dot
+                                return ast.ImportFrom(
+                                    module=submodule, names=node.names, level=1
+                                )
+                        else:
+                            # Importing from different package, use appropriate relative level
+                            return ast.ImportFrom(
+                                module=node.module, names=node.names, level=level + 1
+                            )
+                    except (AttributeError, IndexError):
+                        # Fallback to original logic if path parsing fails
+                        return ast.ImportFrom(
+                            module=node.module, names=node.names, level=level + 1
+                        )
 
         return node
 
