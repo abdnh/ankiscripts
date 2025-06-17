@@ -105,32 +105,57 @@ class ImportRewriter(ast.NodeTransformer):
                                 )
                             )
                     else:
-                        # Importing from different package, use original logic
+                        # Importing from different package
+                        if "." in alias.name:
+                            # Submodule import: "import typing_extensions.utils" -> "from ..typing_extensions import utils"
+                            package_name, *submodule_parts = alias.name.split(".")
+                            submodule_name = submodule_parts[-1]
+                            nodes.append(
+                                ast.ImportFrom(
+                                    module=package_name,
+                                    names=[
+                                        ast.alias(
+                                            name=submodule_name, asname=alias.asname
+                                        )
+                                    ],
+                                    level=level + 1,
+                                )
+                            )
+                        else:
+                            # Simple package import: "import typing_extensions" -> "from .. import typing_extensions"
+                            nodes.append(
+                                ast.ImportFrom(
+                                    module="",
+                                    names=[
+                                        ast.alias(name=alias.name, asname=alias.asname)
+                                    ],
+                                    level=level + 1,
+                                )
+                            )
+                except (AttributeError, IndexError):
+                    # Fallback logic if path parsing fails
+                    if "." in alias.name:
+                        # Submodule import: "import typing_extensions.utils" -> "from ..typing_extensions import utils"
+                        package_name, *submodule_parts = alias.name.split(".")
+                        submodule_name = submodule_parts[-1]
                         nodes.append(
                             ast.ImportFrom(
-                                module="",
+                                module=package_name,
                                 names=[
-                                    ast.alias(
-                                        name=alias.name.split(".")[-1],
-                                        asname=alias.asname,
-                                    )
+                                    ast.alias(name=submodule_name, asname=alias.asname)
                                 ],
                                 level=level + 1,
                             )
                         )
-                except (AttributeError, IndexError):
-                    # Fallback to original logic if path parsing fails
-                    nodes.append(
-                        ast.ImportFrom(
-                            module="",
-                            names=[
-                                ast.alias(
-                                    name=alias.name.split(".")[-1], asname=alias.asname
-                                )
-                            ],
-                            level=level + 1,
+                    else:
+                        # Simple package import: "import typing_extensions" -> "from .. import typing_extensions"
+                        nodes.append(
+                            ast.ImportFrom(
+                                module="",
+                                names=[ast.alias(name=alias.name, asname=alias.asname)],
+                                level=level + 1,
+                            )
                         )
-                    )
 
         # Return single node or list of nodes
         if len(nodes) == 1:
@@ -220,7 +245,11 @@ def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
             and not item.name.endswith(".dist-info")
             and not item.name.endswith(".egg-info")
         ):
+            # Package directory
             vendored_packages.add(item.name)
+        elif item.is_file() and item.suffix == ".py" and not item.name.startswith("_"):
+            # Single module file (like typing_extensions.py)
+            vendored_packages.add(item.stem)
 
     print(f"Found vendored packages: {', '.join(sorted(vendored_packages))}")
 
