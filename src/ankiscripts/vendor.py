@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import itertools
-import re
 import shutil
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
+
+import libcst as cst
 
 from ._utils import pip_install, read_addon_json, run_script, uv
 
@@ -30,207 +30,399 @@ def _get_relative_import_level(current_file_path: Path, vendor_path: Path) -> in
         return 0
 
 
-def _rewrite_import_line(
-    line: str, vendored_packages: set[str], current_file_path: Path, vendor_path: Path
-) -> str:
-    """Rewrite a single import line if it imports from vendored packages."""
-    stripped = line.strip()
+class LibCSTImportTransformer(cst.CSTTransformer):
+    """LibCST transformer to rewrite imports for vendored packages."""
 
-    # Skip non-import lines, comments, and empty lines
-    if (
-        not stripped
-        or stripped.startswith("#")
-        or not (stripped.startswith("import ") or stripped.startswith("from "))
+    def __init__(
+        self, vendored_packages: set[str], current_file_path: Path, vendor_path: Path
     ):
-        return line
+        self.vendored_packages = vendored_packages
+        self.current_file_path = current_file_path
+        self.vendor_path = vendor_path
 
-    level = _get_relative_import_level(current_file_path, vendor_path)
+    def _get_relative_import_level(self) -> int:
+        """Calculate the number of dots needed for relative import."""
+        return _get_relative_import_level(self.current_file_path, self.vendor_path)
 
-    # Handle 'import package' statements
-    import_match = re.match(r"^(\s*)import\s+(.+)$", line)
-    if import_match:
-        indent, imports = import_match.groups()
-        import_parts = [part.strip() for part in imports.split(",")]
+    def _create_dotted_name(self, dotted_name: str) -> cst.BaseExpression:
+        """Create a LibCST node for a dotted module name like 'sentry_sdk.integrations.dedupe'."""
+        parts = dotted_name.split(".")
+        if len(parts) == 1:
+            return cst.Name(parts[0])
 
-        new_imports = []
-        vendored_imports = []
+        # Build the attribute chain: a.b.c becomes Attribute(Attribute(Name('a'), Name('b')), Name('c'))
+        result = cst.Name(parts[0])
+        for part in parts[1:]:
+            result = cst.Attribute(value=result, attr=cst.Name(part))
+        return result
 
-        for import_part in import_parts:
-            # Handle 'as' aliases
-            if " as " in import_part:
-                module_name, alias = import_part.split(" as ", 1)
-                module_name = module_name.strip()
-                alias = alias.strip()
-            else:
-                module_name = import_part.strip()
-                alias = None
+    def _create_module_for_import_from(
+        self, module_name: str
+    ) -> cst.BaseExpression | None:
+        """Create the module part for ImportFrom statements, handling dotted names properly."""
+        if not module_name:
+            return None
 
-            package_name = module_name.split(".")[0]
+        parts = module_name.split(".")
+        if len(parts) == 1:
+            return cst.Name(parts[0])
 
-            if package_name in vendored_packages:
-                vendored_imports.append((module_name, alias))
-            else:
-                new_imports.append(import_part)
+        # For ImportFrom, we need to handle nested modules properly
+        # If we have 'sentry_sdk.integrations.dedupe', we want the module part to be 'integrations.dedupe'
+        # after the package part 'sentry_sdk'
+        return self._create_dotted_name(module_name)
 
-        # Build the replacement lines
-        result_lines = []
+    def _clean_import_names(
+        self, names: cst.ImportStar | Sequence[cst.ImportAlias]
+    ) -> Sequence[cst.ImportAlias]:
+        """Clean up import names to avoid trailing comma syntax errors."""
+        if isinstance(names, cst.ImportStar):
+            return names
 
-        # Add non-vendored imports
-        if new_imports:
-            result_lines.append(f"{indent}import {', '.join(new_imports)}")
+        if not names:
+            return names
 
-        # Add vendored imports as ImportFrom statements
-        for module_name, alias in vendored_imports:
-            alias_part = f" as {alias}" if alias else ""
-
-            if level == 0:
-                # File is outside vendor directory
-                result_lines.append(
-                    f"{indent}from .vendor import {module_name}{alias_part}"
+        # Convert to list and ensure no trailing commas cause syntax issues
+        cleaned_names = []
+        for name_item in names:
+            if isinstance(name_item, cst.ImportAlias):
+                # Create a new ImportAlias without any trailing comma issues
+                cleaned_names.append(
+                    cst.ImportAlias(
+                        name=name_item.name,
+                        asname=name_item.asname,
+                        comma=cst.MaybeSentinel.DEFAULT,  # Let LibCST handle commas properly
+                    )
                 )
-            else:
-                # File is inside vendor directory
-                try:
-                    current_package = current_file_path.parent.name
-                    package_name = module_name.split(".")[0]
 
-                    if package_name == current_package:
-                        # Importing from same package
+        return cleaned_names
+
+    def leave_SimpleStatementLine(
+        self,
+        original_node: cst.SimpleStatementLine,
+        updated_node: cst.SimpleStatementLine,
+    ) -> (
+        cst.SimpleStatementLine
+        | cst.RemovalSentinel
+        | Sequence[cst.SimpleStatementLine]
+    ):
+        """Handle import statements within simple statement lines."""
+        new_statements = []
+
+        for stmt in updated_node.body:
+            if isinstance(stmt, cst.Import):
+                # Handle 'import package' statements
+                new_imports = []
+                vendored_imports = []
+
+                for name_item in stmt.names:
+                    if isinstance(name_item, cst.ImportAlias):
+                        module_name = cst.helpers.get_full_name_for_node(name_item.name)
+                        if module_name:
+                            package_name = module_name.split(".")[0]
+                            if package_name in self.vendored_packages:
+                                vendored_imports.append(name_item)
+                            else:
+                                new_imports.append(name_item)
+
+                statements_to_add = []
+
+                # Add non-vendored imports
+                if new_imports:
+                    statements_to_add.append(cst.Import(names=new_imports))
+
+                # Add vendored imports as ImportFrom statements
+                level = self._get_relative_import_level()
+                for alias in vendored_imports:
+                    module_name = cst.helpers.get_full_name_for_node(alias.name)
+                    if not module_name:
+                        continue
+
+                    if level == 0:
+                        # File is outside vendor directory
+                        # For "import sentry_sdk.integrations.dedupe", create "from .vendor.sentry_sdk.integrations import dedupe"
                         if "." in module_name:
-                            # Submodule import: "import sentry_sdk.utils" -> "from . import utils"
-                            submodule = module_name.split(".")[-1]
-                            result_lines.append(
-                                f"{indent}from . import {submodule}{alias_part}"
+                            parts = module_name.split(".")
+                            package_part = parts[0]  # sentry_sdk
+                            submodule_parts = parts[1:]  # ['integrations', 'dedupe']
+                            imported_name = parts[-1]  # dedupe
+
+                            # Create vendor.sentry_sdk.integrations
+                            vendor_module = cst.Attribute(
+                                value=cst.Name("vendor"), attr=cst.Name(package_part)
+                            )
+                            for part in submodule_parts[
+                                :-1
+                            ]:  # All except the last part
+                                vendor_module = cst.Attribute(
+                                    value=vendor_module, attr=cst.Name(part)
+                                )
+
+                            statements_to_add.append(
+                                cst.ImportFrom(
+                                    module=vendor_module,
+                                    names=[
+                                        cst.ImportAlias(
+                                            name=cst.Name(imported_name),
+                                            asname=alias.asname,
+                                        )
+                                    ],
+                                    relative=[cst.Dot()],
+                                )
                             )
                         else:
-                            # Simple package import: "import sentry_sdk" -> "from .. import sentry_sdk"
-                            dots = "." * (level + 1)
-                            result_lines.append(
-                                f"{indent}from {dots} import {package_name}{alias_part}"
+                            # Simple import like "import sentry_sdk"
+                            statements_to_add.append(
+                                cst.ImportFrom(
+                                    module=cst.Attribute(
+                                        value=cst.Name("vendor"),
+                                        attr=cst.Name(module_name),
+                                    ),
+                                    names=[
+                                        cst.ImportAlias(
+                                            name=cst.Name(module_name),
+                                            asname=alias.asname,
+                                        )
+                                    ],
+                                    relative=[cst.Dot()],
+                                )
                             )
                     else:
-                        # Importing from different package
-                        if "." in module_name:
-                            # Submodule import: "import typing_extensions.utils" -> "from ..typing_extensions import utils"
-                            package_name, *submodule_parts = module_name.split(".")
-                            submodule_name = submodule_parts[-1]
-                            dots = "." * (level + 1)
-                            result_lines.append(
-                                f"{indent}from {dots}{package_name} import {submodule_name}{alias_part}"
-                            )
+                        # File is inside vendor directory
+                        current_package = self.current_file_path.parent.name
+                        package_name = module_name.split(".")[0]
+
+                        if package_name == current_package:
+                            # Importing from same package
+                            if "." in module_name:
+                                # Submodule import: "import sentry_sdk.integrations.dedupe" -> "from .integrations import dedupe"
+                                parts = module_name.split(".")
+                                submodule_parts = parts[
+                                    1:
+                                ]  # Everything after the package name
+                                imported_name = parts[-1]  # The final module name
+
+                                if len(submodule_parts) == 1:
+                                    # Simple submodule: sentry_sdk.client -> from . import client
+                                    statements_to_add.append(
+                                        cst.ImportFrom(
+                                            module=None,
+                                            names=[
+                                                cst.ImportAlias(
+                                                    name=cst.Name(imported_name),
+                                                    asname=alias.asname,
+                                                )
+                                            ],
+                                            relative=[cst.Dot()],
+                                        )
+                                    )
+                                else:
+                                    # Nested submodule: sentry_sdk.integrations.dedupe -> from .integrations import dedupe
+                                    submodule_path = ".".join(submodule_parts[:-1])
+                                    statements_to_add.append(
+                                        cst.ImportFrom(
+                                            module=self._create_module_for_import_from(
+                                                submodule_path
+                                            ),
+                                            names=[
+                                                cst.ImportAlias(
+                                                    name=cst.Name(imported_name),
+                                                    asname=alias.asname,
+                                                )
+                                            ],
+                                            relative=[cst.Dot()],
+                                        )
+                                    )
+                            else:
+                                # Simple package import: "import sentry_sdk" -> "from .. import sentry_sdk"
+                                dots = [cst.Dot()] * (level + 1)
+                                statements_to_add.append(
+                                    cst.ImportFrom(
+                                        module=None,
+                                        names=[
+                                            cst.ImportAlias(
+                                                name=cst.Name(package_name),
+                                                asname=alias.asname,
+                                            )
+                                        ],
+                                        relative=dots,
+                                    )
+                                )
                         else:
-                            # Simple package import: "import typing_extensions" -> "from .. import typing_extensions"
-                            dots = "." * (level + 1)
-                            result_lines.append(
-                                f"{indent}from {dots} import {module_name}{alias_part}"
-                            )
-                except (AttributeError, IndexError):
-                    # Fallback
-                    if "." in module_name:
-                        package_name, *submodule_parts = module_name.split(".")
-                        submodule_name = submodule_parts[-1]
-                        dots = "." * (level + 1)
-                        result_lines.append(
-                            f"{indent}from {dots}{package_name} import {submodule_name}{alias_part}"
-                        )
+                            # Importing from different package
+                            if "." in module_name:
+                                # Submodule import: "import requests.auth.basic" -> "from ..requests.auth import basic"
+                                parts = module_name.split(".")
+                                package_name = parts[0]
+                                submodule_parts = parts[1:]
+                                imported_name = parts[-1]
+                                dots = [cst.Dot()] * (level + 1)
+
+                                if len(submodule_parts) == 1:
+                                    # requests.auth -> from ..requests import auth
+                                    statements_to_add.append(
+                                        cst.ImportFrom(
+                                            module=cst.Name(package_name),
+                                            names=[
+                                                cst.ImportAlias(
+                                                    name=cst.Name(imported_name),
+                                                    asname=alias.asname,
+                                                )
+                                            ],
+                                            relative=dots,
+                                        )
+                                    )
+                                else:
+                                    # requests.auth.basic -> from ..requests.auth import basic
+                                    submodule_path = ".".join(submodule_parts[:-1])
+                                    module_node = cst.Attribute(
+                                        value=cst.Name(package_name),
+                                        attr=self._create_dotted_name(submodule_path),
+                                    )
+                                    statements_to_add.append(
+                                        cst.ImportFrom(
+                                            module=module_node,
+                                            names=[
+                                                cst.ImportAlias(
+                                                    name=cst.Name(imported_name),
+                                                    asname=alias.asname,
+                                                )
+                                            ],
+                                            relative=dots,
+                                        )
+                                    )
+                            else:
+                                # Simple package import: "import requests" -> "from .. import requests"
+                                dots = [cst.Dot()] * (level + 1)
+                                statements_to_add.append(
+                                    cst.ImportFrom(
+                                        module=None,
+                                        names=[
+                                            cst.ImportAlias(
+                                                name=cst.Name(module_name),
+                                                asname=alias.asname,
+                                            )
+                                        ],
+                                        relative=dots,
+                                    )
+                                )
+
+                if statements_to_add:
+                    new_statements.extend(statements_to_add)
+
+            elif isinstance(stmt, cst.ImportFrom):
+                # Handle 'from package import x' statements
+                if stmt.module and not stmt.relative:  # Skip relative imports
+                    module_name = cst.helpers.get_full_name_for_node(stmt.module)
+                    if module_name:
+                        package_name = module_name.split(".")[0]
+                        if package_name == "vendor" and len(module_name.split(".")) > 1:
+                            package_name = module_name.split(".")[1]
+
+                        if package_name in self.vendored_packages:
+                            level = self._get_relative_import_level()
+                            if level == 0:
+                                # File is outside vendor directory
+                                vendor_module = cst.Attribute(
+                                    value=cst.Name("vendor"),
+                                    attr=self._create_dotted_name(module_name),
+                                )
+                                new_statements.append(
+                                    cst.ImportFrom(
+                                        module=vendor_module,
+                                        names=self._clean_import_names(stmt.names),
+                                        relative=[cst.Dot()],
+                                    )
+                                )
+                            else:
+                                # File is inside vendor directory
+                                current_package = self.current_file_path.parent.name
+                                if package_name == current_package:
+                                    # Importing from same package
+                                    if module_name == package_name:
+                                        # Direct import: "from sentry_sdk import Hub" -> "from . import Hub"
+                                        new_statements.append(
+                                            cst.ImportFrom(
+                                                module=None,
+                                                names=self._clean_import_names(
+                                                    stmt.names
+                                                ),
+                                                relative=[cst.Dot()],
+                                            )
+                                        )
+                                    else:
+                                        # Submodule import: "from sentry_sdk.integrations.dedupe import something"
+                                        # -> "from .integrations.dedupe import something"
+                                        submodule = module_name[len(package_name) + 1 :]
+                                        new_statements.append(
+                                            cst.ImportFrom(
+                                                module=self._create_module_for_import_from(
+                                                    submodule
+                                                ),
+                                                names=self._clean_import_names(
+                                                    stmt.names
+                                                ),
+                                                relative=[cst.Dot()],
+                                            )
+                                        )
+                                else:
+                                    # Importing from different package
+                                    dots = [cst.Dot()] * (level + 1)
+                                    new_statements.append(
+                                        cst.ImportFrom(
+                                            module=self._create_module_for_import_from(
+                                                module_name
+                                            ),
+                                            names=self._clean_import_names(stmt.names),
+                                            relative=dots,
+                                        )
+                                    )
+                        else:
+                            new_statements.append(stmt)
                     else:
-                        dots = "." * (level + 1)
-                        result_lines.append(
-                            f"{indent}from {dots} import {module_name}{alias_part}"
-                        )
-
-        if len(result_lines) == 1:
-            return result_lines[0]
-        elif len(result_lines) > 1:
-            return "\n".join(result_lines)
-        else:
-            return ""  # All imports were removed
-
-    # Handle 'from package import x' statements
-    from_match = re.match(r"^(\s*)from\s+([^\s]+)\s+import\s+(.+)$", line)
-    if from_match:
-        indent, module, imports = from_match.groups()
-
-        # Skip relative imports that are already correct
-        if module.startswith("."):
-            return line
-
-        # Check if this is a vendored package
-        package_name = module.split(".")[0]
-        if package_name == "vendor":
-            package_name = module.split(".")[1] if len(module.split(".")) > 1 else ""
-
-        if package_name in vendored_packages:
-            if level == 0:
-                # File is outside vendor directory
-                new_module = f".vendor.{module}"
-                return f"{indent}from {new_module} import {imports}"
+                        new_statements.append(stmt)
+                else:
+                    new_statements.append(stmt)
             else:
-                # File is inside vendor directory
-                try:
-                    current_package = current_file_path.parent.name
-                    if package_name == current_package:
-                        # Importing from same package
-                        if module == package_name:
-                            # Direct import: "from sentry_sdk import utils" -> "from . import utils"
-                            return f"{indent}from . import {imports}"
-                        else:
-                            # Submodule import: "from sentry_sdk.utils import AnnotatedValue" -> "from .utils import AnnotatedValue"
-                            submodule = module[
-                                len(package_name) + 1 :
-                            ]  # +1 for the dot
-                            return f"{indent}from .{submodule} import {imports}"
-                    else:
-                        # Importing from different package
-                        dots = "." * (level + 1)
-                        return f"{indent}from {dots}{module} import {imports}"
-                except (AttributeError, IndexError):
-                    # Fallback
-                    dots = "." * (level + 1)
-                    return f"{indent}from {dots}{module} import {imports}"
+                new_statements.append(stmt)
 
-    return line
+        if new_statements != list(updated_node.body):
+            return updated_node.with_changes(body=new_statements)
+
+        return updated_node
 
 
-def rewrite_imports_in_file(
+def rewrite_imports_with_libcst(
     file_path: Path, vendored_packages: set[str], vendor_path: Path
 ) -> None:
-    """Rewrite imports in a single Python file using line-by-line processing."""
+    """Rewrite imports in a single Python file using LibCST."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+            source_code = f.read()
 
-        new_lines = []
-        for line in lines:
-            new_line = _rewrite_import_line(
-                line.rstrip("\n\r"), vendored_packages, file_path, vendor_path
-            )
+        # Parse the code with LibCST
+        tree = cst.parse_module(source_code)
 
-            # Handle case where one line becomes multiple lines
-            if "\n" in new_line:
-                new_lines.extend(new_line.split("\n"))
-            elif new_line:  # Skip empty lines (removed imports)
-                new_lines.append(new_line)
+        # Transform the tree
+        transformer = LibCSTImportTransformer(vendored_packages, file_path, vendor_path)
+        new_tree = tree.visit(transformer)
 
-        # Add back line endings
-        new_content = "\n".join(new_lines)
-        if lines and lines[-1].endswith("\n"):
-            new_content += "\n"
+        # Generate new code
+        new_code = new_tree.code
 
         # Only write if content changed
-        original_content = "".join(lines)
-        if new_content != original_content:
+        if new_code != source_code:
             with open(file_path, "w", encoding="utf-8") as f:
-                f.write(new_content)
+                f.write(new_code)
 
-    except (UnicodeDecodeError, OSError) as e:
+    except Exception as e:
         print(
             f"Warning: Could not rewrite imports in {file_path}: {e}", file=sys.stderr
         )
 
 
 def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
-    """Rewrite imports in all Python files within the vendor directory."""
+    """Rewrite imports in all Python files within the vendor directory using LibCST."""
     vendored_packages = set()
 
     for item in vendor_path.iterdir():
@@ -251,7 +443,7 @@ def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
     print(f"Rewriting imports in {len(python_files)} Python files...")
 
     for py_file in python_files:
-        rewrite_imports_in_file(py_file, vendored_packages, vendor_path)
+        rewrite_imports_with_libcst(py_file, vendored_packages, vendor_path)
 
     print("Import rewriting completed.")
 
@@ -403,197 +595,6 @@ def install_libs(
     # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.(sh|ps1)
     scripts_dir = addon_root / "scripts"
     run_script(scripts_dir, "vendor")
-
-
-class ImportRewriter(ast.NodeTransformer):
-    """AST transformer to rewrite absolute imports to relative imports for vendored packages.
-
-    NOTE: This class is now deprecated in favor of line-by-line processing.
-    It's kept for backward compatibility but should not be used directly.
-    """
-
-    def __init__(
-        self, vendored_packages: set[str], current_file_path: Path, vendor_path: Path
-    ):
-        self.vendored_packages = vendored_packages
-        self.current_file_path = current_file_path
-        self.vendor_path = vendor_path
-
-    def _get_relative_import_level(self) -> int:
-        """Calculate the number of dots needed for relative import."""
-        return _get_relative_import_level(self.current_file_path, self.vendor_path)
-
-    def visit_Import(self, node: ast.Import) -> ast.Import | ast.ImportFrom | list:
-        """Rewrite 'import package' to relative imports for vendored packages."""
-        new_aliases = []
-        vendored_imports = []
-
-        for alias in node.names:
-            package_name = alias.name.split(".")[0]
-            if package_name in self.vendored_packages:
-                vendored_imports.append(alias)
-            else:
-                new_aliases.append(alias)
-
-        # Create nodes for the different types of imports
-        nodes: list[ast.Import | ast.ImportFrom] = []
-
-        # Add non-vendored imports
-        if new_aliases:
-            nodes.append(ast.Import(names=new_aliases))
-
-        # Add vendored imports as ImportFrom statements
-        for alias in vendored_imports:
-            level = self._get_relative_import_level()
-            if level == 0:
-                # File is outside vendor directory, import from vendor
-                nodes.append(
-                    ast.ImportFrom(
-                        module="vendor",
-                        names=[ast.alias(name=alias.name, asname=alias.asname)],
-                        level=1,
-                    )
-                )
-            else:
-                # File is inside vendor directory, use relative import
-                package_name = alias.name.split(".")[0]
-                try:
-                    current_package = self.current_file_path.parent.name
-                    if package_name == current_package:
-                        # Importing from same package, use level=1
-                        if "." in alias.name:
-                            # Submodule import: "import sentry_sdk.utils" -> "from . import utils"
-                            submodule = alias.name.split(".")[-1]
-                            nodes.append(
-                                ast.ImportFrom(
-                                    module="",
-                                    names=[
-                                        ast.alias(name=submodule, asname=alias.asname)
-                                    ],
-                                    level=1,
-                                )
-                            )
-                        else:
-                            # Simple package import from within same package: "import sentry_sdk" in sentry_sdk/utils.py
-                            # Convert to relative import: "import sentry_sdk" -> "from .. import sentry_sdk"
-                            nodes.append(
-                                ast.ImportFrom(
-                                    module="",
-                                    names=[
-                                        ast.alias(
-                                            name=package_name, asname=alias.asname
-                                        )
-                                    ],
-                                    level=level + 1,
-                                )
-                            )
-                    else:
-                        # Importing from different package
-                        if "." in alias.name:
-                            # Submodule import: "import typing_extensions.utils" -> "from ..typing_extensions import utils"
-                            package_name, *submodule_parts = alias.name.split(".")
-                            submodule_name = submodule_parts[-1]
-                            nodes.append(
-                                ast.ImportFrom(
-                                    module=package_name,
-                                    names=[
-                                        ast.alias(
-                                            name=submodule_name, asname=alias.asname
-                                        )
-                                    ],
-                                    level=level + 1,
-                                )
-                            )
-                        else:
-                            # Simple package import: "import typing_extensions" -> "from .. import typing_extensions"
-                            nodes.append(
-                                ast.ImportFrom(
-                                    module="",
-                                    names=[
-                                        ast.alias(name=alias.name, asname=alias.asname)
-                                    ],
-                                    level=level + 1,
-                                )
-                            )
-                except (AttributeError, IndexError):
-                    # Fallback logic if path parsing fails
-                    if "." in alias.name:
-                        # Submodule import: "import typing_extensions.utils" -> "from ..typing_extensions import utils"
-                        package_name, *submodule_parts = alias.name.split(".")
-                        submodule_name = submodule_parts[-1]
-                        nodes.append(
-                            ast.ImportFrom(
-                                module=package_name,
-                                names=[
-                                    ast.alias(name=submodule_name, asname=alias.asname)
-                                ],
-                                level=level + 1,
-                            )
-                        )
-                    else:
-                        # Simple package import: "import typing_extensions" -> "from .. import typing_extensions"
-                        nodes.append(
-                            ast.ImportFrom(
-                                module="",
-                                names=[ast.alias(name=alias.name, asname=alias.asname)],
-                                level=level + 1,
-                            )
-                        )
-
-        # Return single node or list of nodes
-        if len(nodes) == 1:
-            return nodes[0]
-        elif len(nodes) > 1:
-            return nodes
-        else:
-            # All imports were removed, return None
-            return None
-
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.ImportFrom:
-        """Rewrite 'from package import x' to use relative imports within vendor directory."""
-        if node.module:
-            package_name, *rest = node.module.split(".")
-            if package_name == "vendor":
-                package_name = rest[0]
-            if package_name in self.vendored_packages:
-                level = self._get_relative_import_level()
-                if level == 0:
-                    # File is outside vendor directory, use relative import from src/
-                    new_module = f"vendor.{node.module}"
-                    return ast.ImportFrom(module=new_module, names=node.names, level=1)
-                else:
-                    # File is inside vendor directory, use relative import within vendor
-                    # Check if we're importing from the same package
-                    try:
-                        current_package = self.current_file_path.parent.name
-                        if package_name == current_package:
-                            # Importing from same package, need to determine the correct relative import
-                            if node.module == package_name:
-                                # Direct import from package: "from sentry_sdk import utils" -> "from . import utils"
-                                return ast.ImportFrom(
-                                    module=None, names=node.names, level=1
-                                )
-                            else:
-                                # Submodule import: "from sentry_sdk.utils import AnnotatedValue" -> "from .utils import AnnotatedValue"
-                                # Remove the package prefix and use relative import
-                                submodule = node.module[
-                                    len(package_name) + 1 :
-                                ]  # +1 for the dot
-                                return ast.ImportFrom(
-                                    module=submodule, names=node.names, level=1
-                                )
-                        else:
-                            # Importing from different package, use appropriate relative level
-                            return ast.ImportFrom(
-                                module=node.module, names=node.names, level=level + 1
-                            )
-                    except (AttributeError, IndexError):
-                        # Fallback to original logic if path parsing fails
-                        return ast.ImportFrom(
-                            module=node.module, names=node.names, level=level + 1
-                        )
-
-        return node
 
 
 if __name__ == "__main__":
