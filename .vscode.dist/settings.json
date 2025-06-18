@@ -1,7 +1,13 @@
 {
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-        "source.organizeImports": true
+    "[html]": {
+        "editor.formatOnSave": false
     },
-    "python.formatting.provider": "black"
+    "editor.defaultFormatter": "dprint.dprint",
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "editor.formatOnSave": true
 }
