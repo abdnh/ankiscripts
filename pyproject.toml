@@ -7,6 +7,7 @@ name = "ankiscripts"
 authors = [{ name = "Abdo", email = "abdo@abdnh.net" }]
 description = "A collection of scripts to build my Anki add-ons"
 readme = "README.md"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
@@ -15,8 +16,8 @@ classifiers = [
 dynamic = ["version"]
 dependencies = ["jsonschema>=4,<5", "questionary>=2,<3", "pip", "libcst>=0.4.0"]
 
-[project.optional-dependencies]
-dev = ["mypy", "pylint", "black", "isort", "aqt"]
+[dependency-groups]
+dev = ["mypy", "ruff", "aqt"]
 qt5 = ["pyqt5"]
 qt6 = ["pyqt6"]
 forms = ["pyqt6"]
@@ -25,3 +26,7 @@ forms = ["pyqt6"]
 
 [project.urls]
 Repository = "https://github.com/abdnh/ankiscripts"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "PL", "TRY"]
+ignore = ["PLW0603", "PLR2004"]
