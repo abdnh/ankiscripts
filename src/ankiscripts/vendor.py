@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import itertools
+import logging
 import shutil
 import subprocess
 import sys
@@ -10,12 +12,48 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 import libcst as cst
+from libcst.helpers import get_full_name_for_node
 
 from ._utils import pip_install, read_addon_json, run_script, uv
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 
 addon_root = Path.cwd()
+
+
+# Set up logging for import rewrites
+def setup_import_rewrite_logging(enabled: bool = False) -> logging.Logger:
+    """Set up a logger specifically for tracking import rewrites."""
+    logger = logging.getLogger("import_rewriter")
+
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
+
+    if not enabled:
+        logger.setLevel(logging.CRITICAL + 1)  # Effectively disable logging
+        logger.addHandler(logging.NullHandler())
+        logger.propagate = False
+        return logger
+
+    logger.setLevel(logging.INFO)
+
+    # Create file handler
+    log_file = addon_root / "import_rewrites.log"
+    handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
+    handler.setLevel(logging.INFO)
+
+    # Create formatter
+    formatter = logging.Formatter("%(asctime)s - %(message)s")
+    handler.setFormatter(formatter)
+
+    logger.addHandler(handler)
+    logger.propagate = False  # Don't propagate to root logger
+
+    return logger
+
+
+# Global logger instance - will be configured based on command line args
+import_logger = setup_import_rewrite_logging()
 
 
 def _get_relative_import_level(current_file_path: Path, vendor_path: Path) -> int:
@@ -39,6 +77,16 @@ class LibCSTImportTransformer(cst.CSTTransformer):
         self.vendored_packages = vendored_packages
         self.current_file_path = current_file_path
         self.vendor_path = vendor_path
+        self.transformations_made = False
+
+    def _log_transformation(self, original: str, new: str, import_type: str) -> None:
+        """Log an import transformation for debugging."""
+        import_logger.info(
+            f"FILE: {self.current_file_path}\n"
+            f"  TYPE: {import_type}\n"
+            f"  ORIGINAL: {original}\n"
+            f"  NEW: {new}\n"
+        )
 
     def _get_relative_import_level(self) -> int:
         """Calculate the number of dots needed for relative import."""
@@ -117,11 +165,23 @@ class LibCSTImportTransformer(cst.CSTTransformer):
 
                 for name_item in stmt.names:
                     if isinstance(name_item, cst.ImportAlias):
-                        module_name = cst.helpers.get_full_name_for_node(name_item.name)
+                        module_name = get_full_name_for_node(name_item.name)
                         if module_name:
                             package_name = module_name.split(".")[0]
                             if package_name in self.vendored_packages:
                                 vendored_imports.append(name_item)
+                                # Log the import that will be transformed
+                                original_import = f"import {module_name}"
+                                if name_item.asname:
+                                    alias_name = (
+                                        get_full_name_for_node(name_item.asname.name)
+                                        if name_item.asname.name
+                                        else "unknown"
+                                    )
+                                    original_import += f" as {alias_name}"
+                                import_logger.info(
+                                    f"FILE: {self.current_file_path} - WILL TRANSFORM: {original_import}"
+                                )
                             else:
                                 new_imports.append(name_item)
 
@@ -134,9 +194,15 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                 # Add vendored imports as ImportFrom statements
                 level = self._get_relative_import_level()
                 for alias in vendored_imports:
-                    module_name = cst.helpers.get_full_name_for_node(alias.name)
+                    module_name = get_full_name_for_node(alias.name)
                     if not module_name:
                         continue
+
+                    original_import = f"import {module_name}"
+                    if alias.asname:
+                        original_import += (
+                            f" as {get_full_name_for_node(alias.asname.name)}"
+                        )
 
                     if level == 0:
                         # File is outside vendor directory
@@ -400,6 +466,21 @@ def rewrite_imports_with_libcst(
         with open(file_path, "r", encoding="utf-8") as f:
             source_code = f.read()
 
+        import_logger.info(f"PROCESSING FILE: {file_path}")
+
+        # Log all import statements found in the file
+        import_lines = [
+            line.strip()
+            for line in source_code.split("\n")
+            if line.strip().startswith(("import ", "from "))
+        ]
+        if import_lines:
+            import_logger.info(f"FOUND {len(import_lines)} IMPORT STATEMENTS:")
+            for import_line in import_lines:
+                import_logger.info(f"  {import_line}")
+        else:
+            import_logger.info("NO IMPORT STATEMENTS FOUND")
+
         # Parse the code with LibCST
         tree = cst.parse_module(source_code)
 
@@ -412,17 +493,43 @@ def rewrite_imports_with_libcst(
 
         # Only write if content changed
         if new_code != source_code:
+            import_logger.info(f"CHANGES DETECTED in {file_path}")
+
+            # Log the diff for debugging
+            diff_lines = list(
+                difflib.unified_diff(
+                    source_code.splitlines(keepends=True),
+                    new_code.splitlines(keepends=True),
+                    fromfile=f"original/{file_path.name}",
+                    tofile=f"modified/{file_path.name}",
+                    lineterm="",
+                )
+            )
+
+            import_logger.info("DIFF:")
+            for line in diff_lines:
+                import_logger.info(line.rstrip())
+
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(new_code)
+        else:
+            import_logger.info(f"NO CHANGES NEEDED in {file_path}")
 
     except Exception as e:
+        import_logger.error(f"ERROR processing {file_path}: {e}")
         print(
             f"Warning: Could not rewrite imports in {file_path}: {e}", file=sys.stderr
         )
 
 
-def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
+def rewrite_imports_in_vendor_dir(
+    vendor_path: Path, enable_logging: bool = False
+) -> None:
     """Rewrite imports in all Python files within the vendor directory using LibCST."""
+    # Reconfigure the global logger based on the enable_logging parameter
+    global import_logger
+    import_logger = setup_import_rewrite_logging(enable_logging)
+
     vendored_packages = set()
 
     for item in vendor_path.iterdir():
@@ -446,6 +553,13 @@ def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
         rewrite_imports_with_libcst(py_file, vendored_packages, vendor_path)
 
     print("Import rewriting completed.")
+    import_logger.info("=" * 50)
+    import_logger.info("IMPORT REWRITING COMPLETED")
+    import_logger.info(f"Total files processed: {len(python_files)}")
+    import_logger.info(f"Log file location: {addon_root / 'import_rewrites.log'}")
+    import_logger.info("=" * 50)
+    if enable_logging:
+        print(f"Import rewrite log saved to: {addon_root / 'import_rewrites.log'}")
 
 
 def default_python_versions() -> Iterable[str]:
@@ -536,7 +650,9 @@ def create_universal_binary(
 
 
 def install_libs(
-    python_versions: Iterable[str] | None = None, platforms: Iterable[str] | None = None
+    python_versions: Iterable[str] | None = None,
+    platforms: Iterable[str] | None = None,
+    enable_logging: bool = False,
 ) -> None:
     if not python_versions:
         python_versions = default_python_versions()
@@ -702,7 +818,7 @@ def install_libs(
                         shutil.copy(lib_path, dst)
 
     # Rewrite imports in vendored packages to be relative to the vendor directory
-    rewrite_imports_in_vendor_dir(vendor_path)
+    rewrite_imports_in_vendor_dir(vendor_path, enable_logging)
 
     # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.(sh|ps1)
     scripts_dir = addon_root / "scripts"
@@ -726,7 +842,16 @@ if __name__ == "__main__":
         ),
         help="A comma-separated list of platforms to build platform-specific dependencies for (e.g. win_amd64,manylinux_2_28_x86_64)",
     )
+    parser.add_argument(
+        "--enable-logging",
+        action="store_true",
+        help="Enable detailed logging of import rewrites to import_rewrites.log (default: disabled)",
+    )
 
     args = parser.parse_args()
 
-    install_libs(args.python_versions.split(","), args.platforms.split(","))
+    install_libs(
+        args.python_versions.split(","),
+        args.platforms.split(","),
+        args.enable_logging,
+    )
