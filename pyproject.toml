@@ -22,7 +22,14 @@ qt6 = ["pyqt6"]
 forms = ["pyqt6"]
 
 [dependency-groups]
-dev = ["mypy", "ruff", "aqt"]
+dev = [
+    "aqt",
+    "mypy",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
 
 [tool.setuptools_scm]
 
