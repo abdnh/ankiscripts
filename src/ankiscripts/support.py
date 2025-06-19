@@ -1,8 +1,3 @@
-"""
-Usage:
-
-python -m ankiscripts.support --type github GITHUB_ISSUES https://github.com/abdnh/AnkiApp-importer/issues FORUMS_PAGE https://forums.ankiweb.net/t/ankiapp-importer/16734
-"""
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -35,6 +30,6 @@ if __name__ == "__main__":
     fmt_args = dict((unknown[i], unknown[i + 1]) for i in range(0, len(unknown), 2))
     ext = ".md" if args.type == "github" else ".html"
     file = Path(__file__).parent / f"support{ext}"
-    with open(file, "r", encoding="utf-8") as file:
-        text = file.read()
+    with open(file, encoding="utf-8") as f:
+        text = f.read()
         print(format(text, fmt_args))

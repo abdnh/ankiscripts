@@ -10,9 +10,9 @@ import tempfile
 import urllib
 import urllib.request
 import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import questionary
 
@@ -81,7 +81,7 @@ def compare(a: str | Path, b: str | Path) -> None:
                 shutil.copytree(path, dest_path, dirs_exist_ok=True)
             else:
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(path, "r", encoding="utf-8") as file:
+                with open(path, encoding="utf-8") as file:
                     dest_path.write_text(file.read(), encoding="utf-8")
 
     if report.diff_files:
@@ -92,20 +92,23 @@ def compare(a: str | Path, b: str | Path) -> None:
         if not yes:
             return
         for path in report.diff_files:
-            path = path.relative_to(template_root)
-            with open((template_root / path), "r", encoding="utf-8") as file:
+            rel_path = path.relative_to(template_root)
+            with open((template_root / rel_path), encoding="utf-8") as file:
                 lines1 = file.readlines()
-            with open((addon_root / path), "r", encoding="utf-8") as file:
+            with open((addon_root / rel_path), encoding="utf-8") as file:
                 lines2 = file.readlines()
-            diff_lines = list(difflib.unified_diff(
-                lines1, lines2, f"template/{path}", f"{addon_root.name}/{path}"
-            ))
+            diff_lines = list(
+                difflib.unified_diff(
+                    lines1,
+                    lines2,
+                    f"template/{rel_path}",
+                    f"{addon_root.name}/{rel_path}",
+                )
+            )
             if diff_lines:
-                diff_path = addon_root / path.with_suffix(f"{path.suffix}.diff")
+                diff_path = addon_root / rel_path.with_suffix(f"{rel_path.suffix}.diff")
                 with open(diff_path, "w", encoding="utf-8") as file:
-                    file.writelines(
-                        diff_lines
-                    )
+                    file.writelines(diff_lines)
 
 
 if __name__ == "__main__":

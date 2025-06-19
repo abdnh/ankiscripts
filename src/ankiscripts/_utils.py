@@ -11,7 +11,7 @@ from typing import Any
 
 def read_addon_json(root_dir: Path) -> dict[str, Any]:
     try:
-        with open(root_dir / "addon.json", "r", encoding="utf-8") as file:
+        with open(root_dir / "addon.json", encoding="utf-8") as file:
             return json.load(file)
     except FileNotFoundError:
         return {}
@@ -27,7 +27,7 @@ def uv(*args: Any) -> str:
 
 
 def pip_install(reqs_filename: str, target: str | None = None) -> None:
-    with open(reqs_filename, "r", encoding="utf-8") as file:
+    with open(reqs_filename, encoding="utf-8") as file:
         if not file.read().strip():
             return
     target_args = []
@@ -52,7 +52,7 @@ def symlink_addon(addon_root: Path, addon_package: str) -> None:
         install_path.parent.mkdir(parents=True, exist_ok=True)
         if sys.platform.startswith("win32"):
             subprocess.run(
-                'mklink /J "{}" "{}"'.format(str(install_path), str(src_path)),
+                f'mklink /J "{install_path}" "{src_path}"',
                 shell=True,
                 check=True,
             )

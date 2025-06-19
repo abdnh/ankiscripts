@@ -1,5 +1,6 @@
 """
-This script runs Anki with some useful env variables set for debugging. Anki arguments can be passed.
+This script runs Anki with some useful env variables set for debugging.
+Anki arguments can be passed.
 """
 
 import os

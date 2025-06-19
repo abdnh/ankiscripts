@@ -7,10 +7,7 @@
     "malva": {},
     "markup": {},
     "yaml": {},
-    "excludes": [
-        "**/*-lock.json",
-        "ankiweb_page.html"
-    ],
+    "excludes": ["**/*-lock.json", "support.html"],
     "plugins": [
         "https://plugins.dprint.dev/typescript-0.95.4.wasm",
         "https://plugins.dprint.dev/json-0.20.0.wasm",

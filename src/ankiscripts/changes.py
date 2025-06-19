@@ -5,7 +5,7 @@ from pathlib import Path
 changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
 
 version = sys.argv[1].replace("refs/tags/", "")
-m = re.search(r"\[%s\].*?\n(.*)" % re.escape(version), changelog, re.DOTALL)
+m = re.search(rf"\[{re.escape(version)}\].*?\n(.*)", changelog, re.DOTALL)
 if not m:
     sys.exit(0)
 else:

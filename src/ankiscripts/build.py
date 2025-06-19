@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Dict, List
+from typing import Any
 
 import jsonschema
 
@@ -19,7 +19,8 @@ def with_fixes_for_qt6(code: str) -> str:
     qt_bad_types = [
         ".connect(",
     ]
-    for line in code.splitlines():
+    for original_line in code.splitlines():
+        line = original_line
         for substr in qt_bad_types:
             if substr in line:
                 line = line + "  # type: ignore"
@@ -50,7 +51,8 @@ class Builder:
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--root",
-            help="specify the root directory to use. defaults to the current directory.",
+            help="specify the root directory to use. defaults "
+            "to the current directory.",
             default=".",
         )
         parser.add_argument(
@@ -90,14 +92,16 @@ class Builder:
         )
         parser.add_argument(
             "--manifest",
-            help="Extra key-value pairs to add to manifest.json, which will override the same values in addon.json",
+            help="Extra key-value pairs to add to manifest.json, which will override "
+            "the same values in addon.json",
             metavar="JSON",
             required=False,
         )
         parser.add_argument(
             "--copy",
             "-c",
-            help="Copy specified additional files/directories matching PATTERNS to the distribution. Patterns are relative to the root directory.",
+            help="Copy specified additional files/directories matching PATTERNS to"
+            " the distribution. Patterns are relative to the root directory.",
             metavar="PATTERNS",
         )
 
@@ -110,13 +114,13 @@ class Builder:
         self.dist_dir = self.build_dir / "dist"
         self.build_type = args.type
         self.qt_version = QtVersion(str(args.qt).lower()) if args.qt else QtVersion.NONE
-        self.extra_manifest: Dict[str, Any] = (
+        self.extra_manifest: dict[str, Any] = (
             json.loads(args.manifest) if args.manifest else {}
         )
         self.consts = self._read_addon_json()
         self.should_write_consts = bool(args.consts)
         self.package_path = Path(args.out) if args.out else self._get_package_path()
-        self.excludes: List[str] = list(args.exclude) if args.exclude else []
+        self.excludes: list[str] = list(args.exclude) if args.exclude else []
         self.excludes.extend(["meta.json", "py.typed", ".version"])
         self.copy_patterns = ["README.md", "LICENSE*", "CHANGELOG.md"]
         if args.copy:
@@ -132,7 +136,7 @@ class Builder:
 
         return self.build_dir / name
 
-    def _read_addon_json(self) -> Dict[str, Any]:
+    def _read_addon_json(self) -> dict[str, Any]:
         data = read_addon_json(self.root_dir)
         for k, v in self.extra_manifest.items():
             data[k] = v
@@ -156,7 +160,8 @@ class Builder:
             manifest["homepage"] = consts_copy["homepage"]
         conflicts = consts_copy.get("conflicts", [])
         if self.build_type == "ankiweb":
-            # `name` and `package` are not required for AnkiWeb builds, but it doesn't hurt to add them
+            # `name` and `package` are not required for AnkiWeb builds,
+            # but it doesn't hurt to add them
             if consts_copy.get("ankiweb_id"):
                 manifest["package"] = consts_copy["ankiweb_id"]
             conflicts.append(consts_copy["package"])
@@ -167,7 +172,8 @@ class Builder:
         manifest["conflicts"] = conflicts
         manifest["mod"] = int(self.src_dir.stat().st_mtime)
 
-        # Remove values we copied so far from consts_copy and add the rest as they are to the manifest
+        # Remove values we copied so far from consts_copy
+        # and add the rest as they are to the manifest
         copied = ("name", "package", "homepage", "conflicts", "ankiweb_id")
         for key in copied:
             consts_copy.pop(key, None)
@@ -187,9 +193,9 @@ class Builder:
         self.forms_dir.mkdir(exist_ok=True)
         if self.qt_version is not QtVersion.ALL:
             if self.qt_version is QtVersion.QT5:
-                from PyQt5.uic import compileUi
+                from PyQt5.uic import compileUi  # noqa: PLC0415
             else:
-                from PyQt6.uic import compileUi  # type: ignore[no-redef]
+                from PyQt6.uic import compileUi  # noqa: PLC0415
             for form in forms:
                 buf = io.StringIO()
                 with open(form, encoding="utf-8") as file:
@@ -198,7 +204,7 @@ class Builder:
                 value = buf.getvalue()
                 (self.forms_dir / name).write_text(value, encoding="utf-8")
         else:
-            from PyQt6.uic import compileUi  # type: ignore[no-redef]
+            from PyQt6.uic import compileUi  # noqa: PLC0415
 
             for form in forms:
                 buf = io.StringIO()
@@ -268,7 +274,7 @@ class Builder:
                     rel_path.mkdir(parents=True, exist_ok=True)
                     shutil.copytree(path, rel_path, dirs_exist_ok=True)
                 else:
-                    with open(path, "r", encoding="utf-8") as srcfile:
+                    with open(path, encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
 
     def _run_custom_build_script(self) -> None:
@@ -310,5 +316,39 @@ class Builder:
 
 
 if __name__ == "__main__":
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
+    builder = Builder()
+    builder.build()
     builder = Builder()
     builder.build()

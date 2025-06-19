@@ -8,8 +8,8 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, Sequence
 
 import libcst as cst
 from libcst.helpers import get_full_name_for_node
@@ -92,22 +92,25 @@ class LibCSTImportTransformer(cst.CSTTransformer):
         """Calculate the number of dots needed for relative import."""
         return _get_relative_import_level(self.current_file_path, self.vendor_path)
 
-    def _create_dotted_name(self, dotted_name: str) -> cst.BaseExpression:
-        """Create a LibCST node for a dotted module name like 'sentry_sdk.integrations.dedupe'."""
+    def _create_dotted_name(self, dotted_name: str) -> cst.Attribute | cst.Name:
+        """Create a LibCST node for a dotted module name
+        like 'sentry_sdk.integrations.dedupe'."""
         parts = dotted_name.split(".")
         if len(parts) == 1:
             return cst.Name(parts[0])
 
-        # Build the attribute chain: a.b.c becomes Attribute(Attribute(Name('a'), Name('b')), Name('c'))
-        result = cst.Name(parts[0])
+        # Build the attribute chain: a.b.c becomes
+        # Attribute(Attribute(Name('a'), Name('b')), Name('c'))
+        result: cst.Attribute | cst.Name = cst.Name(parts[0])
         for part in parts[1:]:
             result = cst.Attribute(value=result, attr=cst.Name(part))
         return result
 
     def _create_module_for_import_from(
         self, module_name: str
-    ) -> cst.BaseExpression | None:
-        """Create the module part for ImportFrom statements, handling dotted names properly."""
+    ) -> cst.Attribute | cst.Name | None:
+        """Create the module part for ImportFrom statements,
+        handling dotted names properly."""
         if not module_name:
             return None
 
@@ -116,13 +119,14 @@ class LibCSTImportTransformer(cst.CSTTransformer):
             return cst.Name(parts[0])
 
         # For ImportFrom, we need to handle nested modules properly
-        # If we have 'sentry_sdk.integrations.dedupe', we want the module part to be 'integrations.dedupe'
+        # If we have 'sentry_sdk.integrations.dedupe',
+        # we want the module part to be 'integrations.dedupe'
         # after the package part 'sentry_sdk'
         return self._create_dotted_name(module_name)
 
     def _clean_import_names(
         self, names: cst.ImportStar | Sequence[cst.ImportAlias]
-    ) -> Sequence[cst.ImportAlias]:
+    ) -> Sequence[cst.ImportAlias] | cst.ImportStar:
         """Clean up import names to avoid trailing comma syntax errors."""
         if isinstance(names, cst.ImportStar):
             return names
@@ -139,23 +143,22 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                     cst.ImportAlias(
                         name=name_item.name,
                         asname=name_item.asname,
-                        comma=cst.MaybeSentinel.DEFAULT,  # Let LibCST handle commas properly
+                        # Let LibCST handle commas properly
+                        comma=cst.MaybeSentinel.DEFAULT,
                     )
                 )
 
         return cleaned_names
 
-    def leave_SimpleStatementLine(
+    def leave_SimpleStatementLine(  # noqa: PLR0912, PLR0915
         self,
         original_node: cst.SimpleStatementLine,
         updated_node: cst.SimpleStatementLine,
     ) -> (
-        cst.SimpleStatementLine
-        | cst.RemovalSentinel
-        | Sequence[cst.SimpleStatementLine]
+        cst.BaseStatement | cst.FlattenSentinel[cst.BaseStatement] | cst.RemovalSentinel
     ):
         """Handle import statements within simple statement lines."""
-        new_statements = []
+        new_statements: list[cst.CSTNode | None] = []
 
         for stmt in updated_node.body:
             if isinstance(stmt, cst.Import):
@@ -180,12 +183,13 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                     )
                                     original_import += f" as {alias_name}"
                                 import_logger.info(
-                                    f"FILE: {self.current_file_path} - WILL TRANSFORM: {original_import}"
+                                    f"FILE: {self.current_file_path} -"
+                                    " WILL TRANSFORM: {original_import}"
                                 )
                             else:
                                 new_imports.append(name_item)
 
-                statements_to_add = []
+                statements_to_add: list[cst.CSTNode] = []
 
                 # Add non-vendored imports
                 if new_imports:
@@ -206,7 +210,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
 
                     if level == 0:
                         # File is outside vendor directory
-                        # For "import sentry_sdk.integrations.dedupe", create "from .vendor.sentry_sdk.integrations import dedupe"
+                        # For "import sentry_sdk.integrations.dedupe",
+                        # create "from .vendor.sentry_sdk.integrations import dedupe"
                         if "." in module_name:
                             parts = module_name.split(".")
                             package_part = parts[0]  # sentry_sdk
@@ -261,7 +266,9 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                         if package_name == current_package:
                             # Importing from same package
                             if "." in module_name:
-                                # Submodule import: "import sentry_sdk.integrations.dedupe" -> "from .integrations import dedupe"
+                                # Submodule import:
+                                # "import sentry_sdk.integrations.dedupe"
+                                # -> "from .integrations import dedupe"
                                 parts = module_name.split(".")
                                 submodule_parts = parts[
                                     1:
@@ -269,7 +276,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                 imported_name = parts[-1]  # The final module name
 
                                 if len(submodule_parts) == 1:
-                                    # Simple submodule: sentry_sdk.client -> from . import client
+                                    # Simple submodule: sentry_sdk.client
+                                    # -> from . import client
                                     statements_to_add.append(
                                         cst.ImportFrom(
                                             module=None,
@@ -283,7 +291,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                         )
                                     )
                                 else:
-                                    # Nested submodule: sentry_sdk.integrations.dedupe -> from .integrations import dedupe
+                                    # Nested submodule: sentry_sdk.integrations.dedupe
+                                    # -> from .integrations import dedupe
                                     submodule_path = ".".join(submodule_parts[:-1])
                                     statements_to_add.append(
                                         cst.ImportFrom(
@@ -300,7 +309,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                         )
                                     )
                             else:
-                                # Simple package import: "import sentry_sdk" -> "from .. import sentry_sdk"
+                                # Simple package import: "import sentry_sdk"
+                                # -> "from .. import sentry_sdk"
                                 dots = [cst.Dot()] * (level + 1)
                                 statements_to_add.append(
                                     cst.ImportFrom(
@@ -314,64 +324,66 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                         relative=dots,
                                     )
                                 )
-                        else:
+                        elif "." in module_name:
                             # Importing from different package
-                            if "." in module_name:
-                                # Submodule import: "import requests.auth.basic" -> "from ..requests.auth import basic"
-                                parts = module_name.split(".")
-                                package_name = parts[0]
-                                submodule_parts = parts[1:]
-                                imported_name = parts[-1]
-                                dots = [cst.Dot()] * (level + 1)
+                            # Submodule import: "import requests.auth.basic"
+                            # -> "from ..requests.auth import basic"
+                            parts = module_name.split(".")
+                            package_name = parts[0]
+                            submodule_parts = parts[1:]
+                            imported_name = parts[-1]
+                            dots = [cst.Dot()] * (level + 1)
 
-                                if len(submodule_parts) == 1:
-                                    # requests.auth -> from ..requests import auth
-                                    statements_to_add.append(
-                                        cst.ImportFrom(
-                                            module=cst.Name(package_name),
-                                            names=[
-                                                cst.ImportAlias(
-                                                    name=cst.Name(imported_name),
-                                                    asname=alias.asname,
-                                                )
-                                            ],
-                                            relative=dots,
-                                        )
-                                    )
-                                else:
-                                    # requests.auth.basic -> from ..requests.auth import basic
-                                    submodule_path = ".".join(submodule_parts[:-1])
-                                    module_node = cst.Attribute(
-                                        value=cst.Name(package_name),
-                                        attr=self._create_dotted_name(submodule_path),
-                                    )
-                                    statements_to_add.append(
-                                        cst.ImportFrom(
-                                            module=module_node,
-                                            names=[
-                                                cst.ImportAlias(
-                                                    name=cst.Name(imported_name),
-                                                    asname=alias.asname,
-                                                )
-                                            ],
-                                            relative=dots,
-                                        )
-                                    )
-                            else:
-                                # Simple package import: "import requests" -> "from .. import requests"
-                                dots = [cst.Dot()] * (level + 1)
+                            if len(submodule_parts) == 1:
+                                # requests.auth -> from ..requests import auth
                                 statements_to_add.append(
                                     cst.ImportFrom(
-                                        module=None,
+                                        module=cst.Name(package_name),
                                         names=[
                                             cst.ImportAlias(
-                                                name=cst.Name(module_name),
+                                                name=cst.Name(imported_name),
                                                 asname=alias.asname,
                                             )
                                         ],
                                         relative=dots,
                                     )
                                 )
+                            else:
+                                # requests.auth.basic ->
+                                # from ..requests.auth import basic
+                                submodule_path = ".".join(submodule_parts[:-1])
+                                module_node = cst.Attribute(
+                                    value=cst.Name(package_name),
+                                    attr=self._create_dotted_name(submodule_path),  # type: ignore
+                                )
+                                statements_to_add.append(
+                                    cst.ImportFrom(
+                                        module=module_node,
+                                        names=[
+                                            cst.ImportAlias(
+                                                name=cst.Name(imported_name),
+                                                asname=alias.asname,
+                                            )
+                                        ],
+                                        relative=dots,
+                                    )
+                                )
+                        else:
+                            # Simple package import: "import requests"
+                            # -> "from .. import requests"
+                            dots = [cst.Dot()] * (level + 1)
+                            statements_to_add.append(
+                                cst.ImportFrom(
+                                    module=None,
+                                    names=[
+                                        cst.ImportAlias(
+                                            name=cst.Name(module_name),
+                                            asname=alias.asname,
+                                        )
+                                    ],
+                                    relative=dots,
+                                )
+                            )
 
                 if statements_to_add:
                     new_statements.extend(statements_to_add)
@@ -379,7 +391,7 @@ class LibCSTImportTransformer(cst.CSTTransformer):
             elif isinstance(stmt, cst.ImportFrom):
                 # Handle 'from package import x' statements
                 if stmt.module and not stmt.relative:  # Skip relative imports
-                    module_name = cst.helpers.get_full_name_for_node(stmt.module)
+                    module_name = get_full_name_for_node(stmt.module)
                     if module_name:
                         package_name = module_name.split(".")[0]
                         if package_name == "vendor" and len(module_name.split(".")) > 1:
@@ -391,7 +403,7 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                 # File is outside vendor directory
                                 vendor_module = cst.Attribute(
                                     value=cst.Name("vendor"),
-                                    attr=self._create_dotted_name(module_name),
+                                    attr=self._create_dotted_name(module_name),  # type: ignore
                                 )
                                 new_statements.append(
                                     cst.ImportFrom(
@@ -406,7 +418,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                 if package_name == current_package:
                                     # Importing from same package
                                     if module_name == package_name:
-                                        # Direct import: "from sentry_sdk import Hub" -> "from . import Hub"
+                                        # Direct import: "from sentry_sdk import Hub"
+                                        # -> "from . import Hub"
                                         new_statements.append(
                                             cst.ImportFrom(
                                                 module=None,
@@ -417,8 +430,11 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                             )
                                         )
                                     else:
-                                        # Submodule import: "from sentry_sdk.integrations.dedupe import something"
-                                        # -> "from .integrations.dedupe import something"
+                                        # Submodule import:
+                                        # "from sentry_sdk.integrations.dedupe import
+                                        # something"
+                                        # -> "from .integrations.dedupe import
+                                        # something"
                                         submodule = module_name[len(package_name) + 1 :]
                                         new_statements.append(
                                             cst.ImportFrom(
@@ -463,7 +479,7 @@ def rewrite_imports_with_libcst(
 ) -> None:
     """Rewrite imports in a single Python file using LibCST."""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             source_code = f.read()
 
         import_logger.info(f"PROCESSING FILE: {file_path}")
@@ -516,7 +532,7 @@ def rewrite_imports_with_libcst(
             import_logger.info(f"NO CHANGES NEEDED in {file_path}")
 
     except Exception as e:
-        import_logger.error(f"ERROR processing {file_path}: {e}")
+        import_logger.exception(f"ERROR processing {file_path}")
         print(
             f"Warning: Could not rewrite imports in {file_path}: {e}", file=sys.stderr
         )
@@ -639,17 +655,18 @@ def create_universal_binary(
                 str(output_lib),
             ]
         )
-        print(f"Created universal binary: {output_lib}")
-        return True
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(
             f"Warning: Could not create universal binary for {output_lib}: {e}",
             file=sys.stderr,
         )
         return False
+    else:
+        print(f"Created universal binary: {output_lib}")
+        return True
 
 
-def install_libs(
+def install_libs(  # noqa: PLR0912, PLR0915
     python_versions: Iterable[str] | None = None,
     platforms: Iterable[str] | None = None,
     enable_logging: bool = False,
@@ -675,13 +692,15 @@ def install_libs(
     vendor_path.mkdir(exist_ok=True)
     shutil.rmtree(vendor_path)
     python_exe = shutil.which("python")
+    assert python_exe is not None
     pip_install(str(reqs_path), str(vendor_path))
     reqs_path.unlink()
     bin_path = vendor_path / "bin"
     if bin_path.exists():
         shutil.rmtree(bin_path)
 
-    # Handle dependencies with C modules by downloading wheels for all supported platforms and copying C libraries from them
+    # Handle dependencies with C modules by downloading wheels for
+    # all supported platforms and copying C libraries from them
     build_dir = addon_root / "build"
     build_dir.mkdir(exist_ok=True)
     for dist_info_dir in vendor_path.iterdir():
@@ -689,7 +708,7 @@ def install_libs(
             continue
         package_name = dist_info_dir.name.split("-")[0]
         try:
-            with open(dist_info_dir / "top_level.txt", "r", encoding="utf-8") as file:
+            with open(dist_info_dir / "top_level.txt", encoding="utf-8") as file:
                 module = file.read().strip()
         except Exception:
             module = package_name
@@ -760,9 +779,11 @@ def install_libs(
                             dst.parent.mkdir(parents=True, exist_ok=True)
                             shutil.copy(p, dst)
 
-                            # Process macOS libraries - prioritize universal2, then create universal binaries, then copy individually
+                            # Process macOS libraries - prioritize universal2,
+                            # then create universal binaries, then copy individually
             if "universal2" in wheel_libs_by_arch:
-                # Use universal2 wheel if available (already contains both architectures)
+                # Use universal2 wheel if available
+                # (already contains both architectures)
                 universal2_libs = wheel_libs_by_arch["universal2"]
                 for relative_path, lib_path in universal2_libs.items():
                     dst = module_dir / relative_path
@@ -810,7 +831,8 @@ def install_libs(
                     f"Created {len(common_libs)} universal binaries for {package_name}"
                 )
             elif wheel_libs_by_arch:
-                # Copy remaining macOS libraries that weren't processed for universal binaries
+                # Copy remaining macOS libraries
+                # that weren't processed for universal binaries
                 for arch_libs in wheel_libs_by_arch.values():
                     for relative_path, lib_path in arch_libs.items():
                         dst = module_dir / relative_path
@@ -820,7 +842,8 @@ def install_libs(
     # Rewrite imports in vendored packages to be relative to the vendor directory
     rewrite_imports_in_vendor_dir(vendor_path, enable_logging)
 
-    # Additional vendoring logic (e.g. installing node modules) can be specified in scripts/vendor.(sh|ps1)
+    # Additional vendoring logic (e.g. installing node modules)
+    # can be specified in scripts/vendor.(sh|ps1)
     scripts_dir = addon_root / "scripts"
     run_script(scripts_dir, "vendor")
 
@@ -830,7 +853,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--python-versions",
         default=",".join(default_python_versions()),
-        help="A comma-separated list of Python versions to build platform-specific dependencies for (e.g. 38,39)",
+        help="A comma-separated list of Python versions to build "
+        "platform-specific dependencies for (e.g. 38,39)",
     )
     parser.add_argument(
         "--platforms",
@@ -840,12 +864,14 @@ if __name__ == "__main__":
                 *default_platforms_for_python_version("39"),
             )
         ),
-        help="A comma-separated list of platforms to build platform-specific dependencies for (e.g. win_amd64,manylinux_2_28_x86_64)",
+        help="A comma-separated list of platforms to build platform-specific "
+        "dependencies for (e.g. win_amd64,manylinux_2_28_x86_64)",
     )
     parser.add_argument(
         "--enable-logging",
         action="store_true",
-        help="Enable detailed logging of import rewrites to import_rewrites.log (default: disabled)",
+        help="Enable detailed logging of import rewrites to import_rewrites.log"
+        " (default: disabled)",
     )
 
     args = parser.parse_args()
