@@ -472,8 +472,8 @@ def default_platforms_for_python_version(version: str) -> tuple[str, ...]:
     return (
         "manylinux_2_35_x86_64",
         "manylinux_2_35_aarch64",
-        # FIXME: the following two are conflicting
-        # "macosx_12_0_x86_64",
+        "macosx_12_0_universal2",
+        "macosx_12_0_x86_64",
         "macosx_12_0_arm64",
         "win_amd64",
     )
@@ -508,6 +508,31 @@ def pip_download(
         )
     except subprocess.CalledProcessError as exc:
         print(str(exc), file=sys.stderr)
+
+
+def create_universal_binary(
+    x86_64_lib: Path, arm64_lib: Path, output_lib: Path
+) -> bool:
+    """Create a universal binary from x86_64 and arm64 libraries using llvm-lipo."""
+    try:
+        subprocess.check_call(
+            [
+                "llvm-lipo",
+                "-create",
+                str(x86_64_lib),
+                str(arm64_lib),
+                "-output",
+                str(output_lib),
+            ]
+        )
+        print(f"Created universal binary: {output_lib}")
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(
+            f"Warning: Could not create universal binary for {output_lib}: {e}",
+            file=sys.stderr,
+        )
+        return False
 
 
 def install_libs(
@@ -566,28 +591,115 @@ def install_libs(
                     platform,
                     str(build_dir),
                 )
+
+            # Check if we have both x86_64 and arm64 macOS platforms
+            macos_platforms = [p for p in platforms if p.startswith("macosx_")]
+            has_x86_64 = any("x86_64" in p for p in macos_platforms)
+            has_arm64 = any("arm64" in p for p in macos_platforms)
+            should_create_universal = has_x86_64 and has_arm64
+
+            # Extract wheels and collect libraries by architecture
+            wheel_libs_by_arch: dict[
+                str, dict[Path, Path]
+            ] = {}  # arch -> {relative_path: absolute_path}
+
             for wheel_path in build_dir.glob(
                 f"{package_name}-{version}-cp{python_version}-*.whl"
             ):
-                should_copy = False
+                should_process = False
+                wheel_arch = None
+                is_macos = False
+
                 for platform in platforms:
-                    os, *_, arch = platform.split("_")
+                    os_name, *_, arch = platform.split("_")
                     if arch == "64":
                         arch = "x86_64"
-                    if os in wheel_path.name and arch in wheel_path.name:
-                        should_copy = True
+                    if os_name in wheel_path.name and arch in wheel_path.name:
+                        should_process = True
+                        wheel_arch = arch
+                        is_macos = os_name == "macosx"
                         break
-                if not should_copy:
+
+                if not should_process:
                     continue
+
                 wheel_dir = build_dir / wheel_path.stem
                 wheel_dir.mkdir(exist_ok=True)
                 with zipfile.ZipFile(wheel_path, "r") as file:
                     file.extractall(wheel_dir)
+
+                # Collect libraries from this wheel
                 for p in (wheel_dir / module).rglob("*"):
                     if any(p.match(g) for g in LIB_EXT_GLOBS):
-                        dst = module_dir / p.relative_to(wheel_dir / module)
+                        relative_path = p.relative_to(wheel_dir / module)
+
+                        if is_macos and wheel_arch:
+                            # Collect macOS libraries by architecture
+                            if wheel_arch not in wheel_libs_by_arch:
+                                wheel_libs_by_arch[wheel_arch] = {}
+                            wheel_libs_by_arch[wheel_arch][relative_path] = p
+                        else:
+                            # For non-macOS, copy directly
+                            dst = module_dir / relative_path
+                            dst.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy(p, dst)
+
+                            # Process macOS libraries - prioritize universal2, then create universal binaries, then copy individually
+            if "universal2" in wheel_libs_by_arch:
+                # Use universal2 wheel if available (already contains both architectures)
+                universal2_libs = wheel_libs_by_arch["universal2"]
+                for relative_path, lib_path in universal2_libs.items():
+                    dst = module_dir / relative_path
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(lib_path, dst)
+                print(f"Used universal2 wheel for {package_name}")
+            elif (
+                should_create_universal
+                and "x86_64" in wheel_libs_by_arch
+                and "arm64" in wheel_libs_by_arch
+            ):
+                # Create universal binaries from separate x86_64 and arm64 wheels
+                x86_64_libs = wheel_libs_by_arch["x86_64"]
+                arm64_libs = wheel_libs_by_arch["arm64"]
+
+                # Find common libraries that exist in both architectures
+                common_libs = set(x86_64_libs.keys()) & set(arm64_libs.keys())
+                x86_64_only = set(x86_64_libs.keys()) - common_libs
+                arm64_only = set(arm64_libs.keys()) - common_libs
+
+                # Create universal binaries for common libraries
+                for relative_path in common_libs:
+                    dst = module_dir / relative_path
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+
+                    x86_64_lib = x86_64_libs[relative_path]
+                    arm64_lib = arm64_libs[relative_path]
+
+                    if not create_universal_binary(x86_64_lib, arm64_lib, dst):
+                        # Fall back to copying x86_64 version if lipo fails
+                        shutil.copy(x86_64_lib, dst)
+
+                # Copy architecture-specific macOS libraries
+                for relative_path in x86_64_only:
+                    dst = module_dir / relative_path
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(x86_64_libs[relative_path], dst)
+
+                for relative_path in arm64_only:
+                    dst = module_dir / relative_path
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(arm64_libs[relative_path], dst)
+
+                print(
+                    f"Created {len(common_libs)} universal binaries for {package_name}"
+                )
+            elif wheel_libs_by_arch:
+                # Copy remaining macOS libraries that weren't processed for universal binaries
+                for arch_libs in wheel_libs_by_arch.values():
+                    for relative_path, lib_path in arch_libs.items():
+                        dst = module_dir / relative_path
                         dst.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy(p, dst)
+                        shutil.copy(lib_path, dst)
 
     # Rewrite imports in vendored packages to be relative to the vendor directory
     rewrite_imports_in_vendor_dir(vendor_path)
