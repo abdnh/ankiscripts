@@ -21,6 +21,87 @@ LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 addon_root = Path.cwd()
 
 
+def _get_addon_identifier(addon_root: Path) -> str:
+    """Get a unique identifier for the add-on to use in module names."""
+    # Try to get addon ID from addon.json
+    addon_meta = read_addon_json(addon_root)
+    package_name = addon_meta.get("package")
+    if package_name:
+        # Use the addon package name if available
+        return str(package_name)
+    # Fall back to directory name
+    return addon_root.name
+
+
+def _create_unique_module_name(original_name: str, addon_id: str) -> str:
+    """Create a unique module name by appending the addon identifier."""
+    return f"{original_name}_{addon_id}"
+
+
+def _rename_vendored_packages(vendor_path: Path) -> dict[str, str]:
+    """Rename vendored package directories to have unique names.
+
+    Returns:
+        Dictionary mapping original names to unique names
+    """
+    addon_id = _get_addon_identifier(addon_root)
+    renames = {}
+
+    print(f"Renaming vendored packages with addon ID: {addon_id}")
+
+    for item in vendor_path.iterdir():
+        if item.is_dir() and not item.name.startswith("."):
+            if not (
+                item.name.endswith(".dist-info") or item.name.endswith(".egg-info")
+            ):
+                original_name = item.name
+                unique_name = _create_unique_module_name(original_name, addon_id)
+
+                if original_name != unique_name:
+                    new_path = vendor_path / unique_name
+
+                    # Avoid renaming if target already exists
+                    if not new_path.exists():
+                        print(f"  Renaming {original_name} -> {unique_name}")
+                        item.rename(new_path)
+                        renames[original_name] = unique_name
+                    else:
+                        print(
+                            f"  Skipping {original_name} (target {unique_name}"
+                            " already exists)"
+                        )
+                        renames[original_name] = unique_name
+        elif item.is_file() and item.suffix == ".py" and not item.name.startswith("_"):
+            # Handle single-file modules,
+            # but skip test files and other non-package files
+            original_name = item.stem
+
+            # Skip test files and other non-package files
+            if original_name.startswith("test_") or original_name in [
+                "setup",
+                "conftest",
+            ]:
+                continue
+
+            unique_name = _create_unique_module_name(original_name, addon_id)
+
+            if original_name != unique_name:
+                new_path = vendor_path / f"{unique_name}.py"
+
+                if not new_path.exists():
+                    print(f"  Renaming {item.name} -> {unique_name}.py")
+                    item.rename(new_path)
+                    renames[original_name] = unique_name
+                else:
+                    print(
+                        f"  Skipping {item.name} "
+                        "(target {unique_name}.py already exists)"
+                    )
+                    renames[original_name] = unique_name
+
+    return renames
+
+
 # Set up logging for import rewrites
 def setup_import_rewrite_logging(enabled: bool = False) -> logging.Logger:
     """Set up a logger specifically for tracking import rewrites."""
@@ -72,11 +153,17 @@ class LibCSTImportTransformer(cst.CSTTransformer):
     """LibCST transformer to rewrite imports for vendored packages."""
 
     def __init__(
-        self, vendored_packages: set[str], current_file_path: Path, vendor_path: Path
+        self,
+        vendored_packages: set[str],
+        current_file_path: Path,
+        vendor_path: Path,
+        package_renames: dict[str, str] | None = None,
     ):
         self.vendored_packages = vendored_packages
         self.current_file_path = current_file_path
         self.vendor_path = vendor_path
+        self.addon_id = _get_addon_identifier(addon_root)
+        self.package_renames = package_renames or {}
         self.transformations_made = False
 
     def _log_transformation(self, original: str, new: str, import_type: str) -> None:
@@ -124,6 +211,10 @@ class LibCSTImportTransformer(cst.CSTTransformer):
         # after the package part 'sentry_sdk'
         return self._create_dotted_name(module_name)
 
+    def _get_renamed_module(self, module_name: str) -> str:
+        """Get the renamed module name if it exists in package_renames."""
+        return self.package_renames.get(module_name, module_name)
+
     def _clean_import_names(
         self, names: cst.ImportStar | Sequence[cst.ImportAlias]
     ) -> Sequence[cst.ImportAlias] | cst.ImportStar:
@@ -150,6 +241,88 @@ class LibCSTImportTransformer(cst.CSTTransformer):
 
         return cleaned_names
 
+    def _add_aliases_for_renamed_packages(
+        self, names: cst.ImportStar | Sequence[cst.ImportAlias], module_name: str
+    ) -> Sequence[cst.ImportAlias] | cst.ImportStar:
+        """Add aliases for renamed packages to maintain original names.
+
+        For example, if importing 'h11_game_changer_ankiscripts'
+        but it was originally 'h11_game_changer',
+        this will add an alias:
+        'from . import h11_game_changer_ankiscripts as h11_game_changer'
+        """
+        if isinstance(names, cst.ImportStar):
+            return names
+
+        if not names:
+            return names
+
+        # Create a reverse mapping from renamed to original
+        reverse_renames = {v: k for k, v in self.package_renames.items()}
+
+        # Get the package name from the module
+        package_name = module_name.split(".")[0]
+
+        # Debug logging
+        import_logger.debug(
+            "_add_aliases_for_renamed_packages: "
+            f"module_name={module_name}, "
+            f"package_name={package_name}"
+        )
+        import_logger.debug(f"reverse_renames={reverse_renames}")
+
+        # Check if this is a renamed package (the module name is in the renamed values)
+        if package_name in reverse_renames:
+            original_name = reverse_renames[package_name]
+            import_logger.debug(
+                f"Found renamed package {package_name} -> original {original_name}"
+            )
+
+            # Process each import name
+            new_names = []
+            for name_item in names:
+                if isinstance(name_item, cst.ImportAlias):
+                    imported_name = get_full_name_for_node(name_item.name)
+                    import_logger.debug(
+                        f"Processing import: {imported_name}, "
+                        "has_alias={name_item.asname is not None}"
+                    )
+
+                    # If importing the renamed package directly and no alias exists
+                    if imported_name == package_name and name_item.asname is None:
+                        # Add alias to original name:
+                        # h11_addon_name -> h11
+                        import_logger.debug(
+                            f"Adding alias: {imported_name} as {original_name}"
+                        )
+                        new_names.append(
+                            cst.ImportAlias(
+                                name=name_item.name,
+                                asname=cst.AsName(
+                                    name=cst.Name(original_name),
+                                    whitespace_before_as=cst.SimpleWhitespace(" "),
+                                    whitespace_after_as=cst.SimpleWhitespace(" "),
+                                ),
+                                comma=cst.MaybeSentinel.DEFAULT,
+                            )
+                        )
+                    else:
+                        # Keep the original import as-is
+                        new_names.append(
+                            cst.ImportAlias(
+                                name=name_item.name,
+                                asname=name_item.asname,
+                                comma=cst.MaybeSentinel.DEFAULT,
+                            )
+                        )
+
+            return new_names
+        else:
+            import_logger.debug(f"No alias needed for {package_name}")
+
+        # No renaming needed, return cleaned names
+        return self._clean_import_names(names)
+
     def leave_SimpleStatementLine(  # noqa: PLR0912, PLR0915
         self,
         original_node: cst.SimpleStatementLine,
@@ -170,11 +343,22 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                     if isinstance(name_item, cst.ImportAlias):
                         module_name = get_full_name_for_node(name_item.name)
                         if module_name:
+                            # First check for renamed packages
+                            original_package = module_name.split(".")[0]
+                            if original_package in self.package_renames:
+                                # Apply renaming first
+                                renamed_package = self.package_renames[original_package]
+                                module_name = module_name.replace(
+                                    original_package, renamed_package, 1
+                                )
+
                             package_name = module_name.split(".")[0]
                             if package_name in self.vendored_packages:
-                                vendored_imports.append(name_item)
+                                vendored_imports.append((name_item, module_name))
                                 # Log the import that will be transformed
-                                original_import = f"import {module_name}"
+                                original_import = (
+                                    f"import {get_full_name_for_node(name_item.name)}"
+                                )
                                 if name_item.asname:
                                     alias_name = (
                                         get_full_name_for_node(name_item.asname.name)
@@ -183,8 +367,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                     )
                                     original_import += f" as {alias_name}"
                                 import_logger.info(
-                                    f"FILE: {self.current_file_path} -"
-                                    " WILL TRANSFORM: {original_import}"
+                                    f"FILE: {self.current_file_path} - "
+                                    f"WILL TRANSFORM: {original_import}"
                                 )
                             else:
                                 new_imports.append(name_item)
@@ -195,14 +379,10 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                 if new_imports:
                     statements_to_add.append(cst.Import(names=new_imports))
 
-                # Add vendored imports as ImportFrom statements
+                # Add vendored imports as ImportFrom statements (converted to relative)
                 level = self._get_relative_import_level()
-                for alias in vendored_imports:
-                    module_name = get_full_name_for_node(alias.name)
-                    if not module_name:
-                        continue
-
-                    original_import = f"import {module_name}"
+                for alias, module_name in vendored_imports:
+                    original_import = f"import {get_full_name_for_node(alias.name)}"
                     if alias.asname:
                         original_import += (
                             f" as {get_full_name_for_node(alias.asname.name)}"
@@ -276,8 +456,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                 imported_name = parts[-1]  # The final module name
 
                                 if len(submodule_parts) == 1:
-                                    # Simple submodule: sentry_sdk.client
-                                    # -> from . import client
+                                    # Simple submodule: sentry_sdk.client ->
+                                    # from . import client
                                     statements_to_add.append(
                                         cst.ImportFrom(
                                             module=None,
@@ -311,14 +491,48 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                             else:
                                 # Simple package import: "import sentry_sdk"
                                 # -> "from .. import sentry_sdk"
+                                # (or sentry_sdk_game_changer as sentry_sdk)
                                 dots = [cst.Dot()] * (level + 1)
+
+                                # Check if we need to create
+                                # an alias for a renamed package
+                                # The original import was for the base name
+                                # (e.g., sentry_sdk)
+                                # but the package was renamed
+                                # (e.g., to sentry_sdk_game_changer)
+                                original_name = get_full_name_for_node(alias.name)
+                                final_asname = alias.asname
+                                # Default to the current (renamed) name
+                                import_name = package_name
+
+                                if (
+                                    original_name != package_name
+                                    and original_name in self.package_renames
+                                    and alias.asname is None
+                                ):
+                                    # The original import name was renamed
+                                    # to the current package
+                                    # Import the renamed package
+                                    # but alias it back to the original
+                                    import_name = package_name  # Use renamed name
+                                    final_asname = cst.AsName(
+                                        name=cst.Name(original_name),
+                                        whitespace_before_as=cst.SimpleWhitespace(" "),
+                                        whitespace_after_as=cst.SimpleWhitespace(" "),
+                                    )
+                                    import_logger.info(
+                                        "Creating same-package aliased import: "
+                                        "from {'.' * len(dots)} "
+                                        f"import {import_name} as {original_name}"
+                                    )
+
                                 statements_to_add.append(
                                     cst.ImportFrom(
                                         module=None,
                                         names=[
                                             cst.ImportAlias(
-                                                name=cst.Name(package_name),
-                                                asname=alias.asname,
+                                                name=cst.Name(import_name),
+                                                asname=final_asname,
                                             )
                                         ],
                                         relative=dots,
@@ -370,15 +584,48 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                 )
                         else:
                             # Simple package import: "import requests"
-                            # -> "from .. import requests"
+                            # or "import singlefile"
+                            # -> "from .. import requests" or
+                            # "from .. import singlefile_addon as singlefile"
                             dots = [cst.Dot()] * (level + 1)
+
+                            # Check if this is a package/module that was renamed
+                            # and needs an alias
+                            final_asname = alias.asname
+                            import_name = (
+                                module_name  # The name to use in the import statement
+                            )
+                            original_name = get_full_name_for_node(alias.name)
+
+                            # Check if the original package/module was renamed
+                            if (
+                                original_name in self.package_renames
+                                and alias.asname is None
+                            ):
+                                # This original package/module was renamed
+                                # (e.g., sentry_sdk -> sentry_sdk_game_changer or
+                                #  typing_extensions -> typing_extensions_game_changer)
+                                # We need to import the renamed package/module
+                                # but alias it back to original
+                                renamed_name = self.package_renames[original_name]
+                                import_name = renamed_name
+                                final_asname = cst.AsName(
+                                    name=cst.Name(original_name),
+                                    whitespace_before_as=cst.SimpleWhitespace(" "),
+                                    whitespace_after_as=cst.SimpleWhitespace(" "),
+                                )
+                                import_logger.info(
+                                    f"Creating aliased import: from {'.' * len(dots)} "
+                                    f"import {renamed_name} as {original_name}"
+                                )
+
                             statements_to_add.append(
                                 cst.ImportFrom(
                                     module=None,
                                     names=[
                                         cst.ImportAlias(
-                                            name=cst.Name(module_name),
-                                            asname=alias.asname,
+                                            name=cst.Name(import_name),
+                                            asname=final_asname,
                                         )
                                     ],
                                     relative=dots,
@@ -390,9 +637,18 @@ class LibCSTImportTransformer(cst.CSTTransformer):
 
             elif isinstance(stmt, cst.ImportFrom):
                 # Handle 'from package import x' statements
-                if stmt.module and not stmt.relative:  # Skip relative imports
+                if stmt.module and not stmt.relative:  # Handle absolute imports
                     module_name = get_full_name_for_node(stmt.module)
                     if module_name:
+                        # First check for renamed packages
+                        original_package = module_name.split(".")[0]
+                        if original_package in self.package_renames:
+                            # Apply renaming first
+                            renamed_package = self.package_renames[original_package]
+                            module_name = module_name.replace(
+                                original_package, renamed_package, 1
+                            )
+
                         package_name = module_name.split(".")[0]
                         if package_name == "vendor" and len(module_name.split(".")) > 1:
                             package_name = module_name.split(".")[1]
@@ -431,10 +687,8 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                         )
                                     else:
                                         # Submodule import:
-                                        # "from sentry_sdk.integrations.dedupe import
-                                        # something"
-                                        # -> "from .integrations.dedupe import
-                                        # something"
+                                        # "from sentry_sdk.int.dedupe import something"
+                                        # -> "from .int.dedupe import something"
                                         submodule = module_name[len(package_name) + 1 :]
                                         new_statements.append(
                                             cst.ImportFrom(
@@ -450,18 +704,177 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                 else:
                                     # Importing from different package
                                     dots = [cst.Dot()] * (level + 1)
+
+                                    # Check if we need to
+                                    # add aliases for renamed packages
+                                    names_with_aliases = (
+                                        self._add_aliases_for_renamed_packages(
+                                            stmt.names, module_name
+                                        )
+                                    )
+
                                     new_statements.append(
                                         cst.ImportFrom(
                                             module=self._create_module_for_import_from(
                                                 module_name
                                             ),
-                                            names=self._clean_import_names(stmt.names),
+                                            names=names_with_aliases,
                                             relative=dots,
                                         )
                                     )
                         else:
                             new_statements.append(stmt)
                     else:
+                        new_statements.append(stmt)
+                elif stmt.relative and not stmt.module:
+                    # Handle relative imports like "from . import package_name"
+                    # or "from .. import package_name"
+                    # We need to check if any of the imported names
+                    # are vendored packages that have been renamed
+                    if isinstance(stmt.names, (list, tuple)):
+                        # Check if any imported names are vendored packages
+                        vendored_names = []
+                        non_vendored_names = []
+
+                        # Create reverse mapping from renamed to original names
+                        reverse_renames = {
+                            v: k for k, v in self.package_renames.items()
+                        }
+
+                        for name_item in stmt.names:
+                            if isinstance(name_item, cst.ImportAlias):
+                                imported_name = get_full_name_for_node(name_item.name)
+                                if imported_name:
+                                    # Check if this name is a renamed package
+                                    # (exists in package_renames values)
+                                    if imported_name in reverse_renames:
+                                        # This is a renamed package,
+                                        # get the original name
+                                        original_name = reverse_renames[imported_name]
+                                        import_logger.info(
+                                            f"Found renamed import: {imported_name} "
+                                            f"-> will alias as {original_name}"
+                                        )
+                                        vendored_names.append(
+                                            (name_item, original_name, imported_name)
+                                        )
+                                    # Also check if this is a vendored package
+                                    # that exists in our vendored packages set
+                                    elif imported_name in self.vendored_packages:
+                                        # This is a vendored package that
+                                        # may need aliasing
+                                        # Check if it's in our
+                                        # vendored packages and was renamed
+                                        if imported_name in reverse_renames:
+                                            original_name = reverse_renames[
+                                                imported_name
+                                            ]
+                                            vendored_names.append(
+                                                (
+                                                    name_item,
+                                                    original_name,
+                                                    imported_name,
+                                                )
+                                            )
+                                        else:
+                                            # Check if any original package
+                                            # was renamed to this name
+                                            found_original = None
+                                            for (
+                                                orig,
+                                                renamed,
+                                            ) in self.package_renames.items():
+                                                if renamed == imported_name:
+                                                    found_original = orig
+                                                    break
+                                            if found_original:
+                                                vendored_names.append(
+                                                    (
+                                                        name_item,
+                                                        found_original,
+                                                        imported_name,
+                                                    )
+                                                )
+                                            else:
+                                                # It's a vendored package
+                                                #  but doesn't need aliasing
+                                                non_vendored_names.append(name_item)
+                                    # Also check the old logic
+                                    # for backward compatibility
+                                    elif imported_name in self.package_renames:
+                                        # This is a package that was renamed
+                                        renamed_name = self.package_renames[
+                                            imported_name
+                                        ]
+                                        vendored_names.append(
+                                            (name_item, imported_name, renamed_name)
+                                        )
+                                    else:
+                                        non_vendored_names.append(name_item)
+
+                        # If we have vendored names, we need to transform them
+                        if vendored_names:
+                            # Add non-vendored imports as-is
+                            if non_vendored_names:
+                                new_statements.append(
+                                    cst.ImportFrom(
+                                        module=stmt.module,
+                                        names=non_vendored_names,
+                                        relative=stmt.relative,
+                                    )
+                                )
+
+                            # Add vendored imports with renamed names and aliases
+                            for (
+                                original_alias,
+                                original_name,
+                                renamed_name,
+                            ) in vendored_names:
+                                # Check if the import already has an alias
+                                if original_alias.asname is not None:
+                                    # Import already has an alias, keep it as-is
+                                    new_statements.append(
+                                        cst.ImportFrom(
+                                            module=stmt.module,
+                                            names=[original_alias],
+                                            relative=stmt.relative,
+                                        )
+                                    )
+                                else:
+                                    # Create import with renamed name
+                                    # and alias back to original
+                                    dots_str = "." * len(stmt.relative)
+                                    import_logger.info(
+                                        "Creating aliased import: "
+                                        f"from {dots_str} import {renamed_name}"
+                                        f" as {original_name}"
+                                    )
+                                    new_statements.append(
+                                        cst.ImportFrom(
+                                            module=stmt.module,
+                                            names=[
+                                                cst.ImportAlias(
+                                                    name=cst.Name(renamed_name),
+                                                    asname=cst.AsName(
+                                                        name=cst.Name(original_name),
+                                                        whitespace_before_as=cst.SimpleWhitespace(
+                                                            " "
+                                                        ),
+                                                        whitespace_after_as=cst.SimpleWhitespace(
+                                                            " "
+                                                        ),
+                                                    ),
+                                                    comma=cst.MaybeSentinel.DEFAULT,
+                                                )
+                                            ],
+                                            relative=stmt.relative,
+                                        )
+                                    )
+                        else:
+                            # No vendored packages, keep as-is
+                            new_statements.append(stmt)
+                    else:
+                        # Not a list of names (maybe ImportStar), keep as-is
                         new_statements.append(stmt)
                 else:
                     new_statements.append(stmt)
@@ -475,9 +888,14 @@ class LibCSTImportTransformer(cst.CSTTransformer):
 
 
 def rewrite_imports_with_libcst(
-    file_path: Path, vendored_packages: set[str], vendor_path: Path
+    file_path: Path,
+    vendored_packages: set[str],
+    vendor_path: Path,
+    package_renames: dict[str, str] | None = None,
 ) -> None:
     """Rewrite imports in a single Python file using LibCST."""
+    if package_renames is None:
+        package_renames = {}
     try:
         with open(file_path, encoding="utf-8") as f:
             source_code = f.read()
@@ -501,7 +919,9 @@ def rewrite_imports_with_libcst(
         tree = cst.parse_module(source_code)
 
         # Transform the tree
-        transformer = LibCSTImportTransformer(vendored_packages, file_path, vendor_path)
+        transformer = LibCSTImportTransformer(
+            vendored_packages, file_path, vendor_path, package_renames
+        )
         new_tree = tree.visit(transformer)
 
         # Generate new code
@@ -540,12 +960,23 @@ def rewrite_imports_with_libcst(
 
 def rewrite_imports_in_vendor_dir(
     vendor_path: Path, enable_logging: bool = False
-) -> None:
-    """Rewrite imports in all Python files within the vendor directory using LibCST."""
+) -> dict[str, str]:
+    """Rewrite imports in all Python files within the vendor directory using LibCST.
+
+    Returns:
+        Dictionary mapping original package names to unique names
+    """
     # Reconfigure the global logger based on the enable_logging parameter
     global import_logger
     import_logger = setup_import_rewrite_logging(enable_logging)
 
+    # First, rename vendored packages to have unique names
+    package_renames = _rename_vendored_packages(vendor_path)
+
+    # Get addon identifier for unique naming
+    addon_id = _get_addon_identifier(addon_root)
+
+    # Collect vendored packages (now with unique names)
     vendored_packages = set()
 
     for item in vendor_path.iterdir():
@@ -561,21 +992,22 @@ def rewrite_imports_in_vendor_dir(
             vendored_packages.add(item.stem)
 
     print(f"Found vendored packages: {', '.join(sorted(vendored_packages))}")
+    print(f"Package renames: {package_renames}")
+    print(f"Using addon identifier: {addon_id}")
 
     python_files = list(vendor_path.rglob("*.py"))
     print(f"Rewriting imports in {len(python_files)} Python files...")
 
     for py_file in python_files:
-        rewrite_imports_with_libcst(py_file, vendored_packages, vendor_path)
+        # Pass both renamed packages (for current directory structure)
+        # and package_renames (for transformation)
+        rewrite_imports_with_libcst(
+            py_file, vendored_packages, vendor_path, package_renames
+        )
 
     print("Import rewriting completed.")
-    import_logger.info("=" * 50)
-    import_logger.info("IMPORT REWRITING COMPLETED")
-    import_logger.info(f"Total files processed: {len(python_files)}")
-    import_logger.info(f"Log file location: {addon_root / 'import_rewrites.log'}")
-    import_logger.info("=" * 50)
-    if enable_logging:
-        print(f"Import rewrite log saved to: {addon_root / 'import_rewrites.log'}")
+
+    return package_renames
 
 
 def default_python_versions() -> Iterable[str]:
