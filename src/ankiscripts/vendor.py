@@ -14,7 +14,7 @@ from pathlib import Path
 import libcst as cst
 from libcst.helpers import get_full_name_for_node
 
-from ._utils import pip_install, read_addon_json, run_script, uv
+from ._utils import pip_install, read_addon_json, run_script
 
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 
@@ -671,6 +671,9 @@ def install_libs(  # noqa: PLR0912, PLR0915
     platforms: Iterable[str] | None = None,
     enable_logging: bool = False,
 ) -> None:
+    python_exe = shutil.which("python")
+    assert python_exe is not None
+
     if not python_versions:
         python_versions = default_python_versions()
     if not platforms:
@@ -682,19 +685,10 @@ def install_libs(  # noqa: PLR0912, PLR0915
         )
 
     addon_root = Path(".")
-
-    reqs_path = addon_root / ".reqs.txt"
-    reqs_path.write_text(
-        uv("export", "--no-dev", "--no-editable", "--no-emit-project"),
-        encoding="utf-8",
-    )
     vendor_path = addon_root / "src" / "vendor"
     vendor_path.mkdir(exist_ok=True)
     shutil.rmtree(vendor_path)
-    python_exe = shutil.which("python")
-    assert python_exe is not None
-    pip_install(str(reqs_path), str(vendor_path))
-    reqs_path.unlink()
+    pip_install(str(vendor_path))
     bin_path = vendor_path / "bin"
     if bin_path.exists():
         shutil.rmtree(bin_path)

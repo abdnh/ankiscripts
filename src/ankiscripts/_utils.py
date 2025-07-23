@@ -26,10 +26,7 @@ def uv(*args: Any) -> str:
     return subprocess.check_output([shutil.which("uv"), *args], encoding="utf-8")
 
 
-def pip_install(reqs_filename: str, target: str | None = None) -> None:
-    with open(reqs_filename, encoding="utf-8") as file:
-        if not file.read().strip():
-            return
+def pip_install(target: str | None = None) -> None:
     target_args = []
     if target:
         target_args.extend(["--target", target])
@@ -37,8 +34,8 @@ def pip_install(reqs_filename: str, target: str | None = None) -> None:
         "pip",
         "install",
         "--upgrade",
-        "-r",
-        reqs_filename,
+        "--requirements",
+        "pyproject.toml",
         "--link-mode",
         "copy",
         *target_args,
