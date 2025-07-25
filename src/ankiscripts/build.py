@@ -169,8 +169,8 @@ class Builder:
             manifest["package"] = consts_copy["package"]
             if consts_copy.get("ankiweb_id"):
                 conflicts.append(consts_copy["ankiweb_id"])
+            manifest["mod"] = int(self.src_dir.stat().st_mtime)
         manifest["conflicts"] = conflicts
-        manifest["mod"] = int(self.src_dir.stat().st_mtime)
 
         # Remove values we copied so far from consts_copy
         # and add the rest as they are to the manifest
