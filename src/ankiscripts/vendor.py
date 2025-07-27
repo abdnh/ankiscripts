@@ -581,7 +581,7 @@ def rewrite_imports_in_vendor_dir(
 def default_python_versions() -> Iterable[str]:
     addon_meta = read_addon_json(addon_root)
     min_point_version = int(addon_meta.get("min_point_version", 0))
-    max_point_version = abs(int(addon_meta.get("max_point_version", 999)))
+    max_point_version = abs(int(addon_meta.get("max_point_version", 999999)))
     versions = []
     if min_point_version < 17:
         versions.append("36")
@@ -591,6 +591,8 @@ def default_python_versions() -> Iterable[str]:
         versions.append("38")
     if max_point_version >= 50:
         versions.append("39")
+    if max_point_version >= 250700:
+        versions.append("313")
 
     return versions
 
