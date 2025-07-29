@@ -20,6 +20,7 @@ dependencies = ["jsonschema>=4,<5", "questionary>=2,<3", "pip", "libcst>=0.4.0"]
 qt5 = ["pyqt5"]
 qt6 = ["pyqt6"]
 forms = ["pyqt6"]
+restart-anki = ["pyinstaller", "psutil", "send2trash", "types-psutil", "types-Send2Trash"]
 
 [dependency-groups]
 dev = [

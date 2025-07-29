@@ -28,7 +28,7 @@ This script takes a path to an add-on and compares it with the template, offerin
 
 ### [vendor.py](src/ankiscripts/vendor.py)
 
-This installs dependencies in the project's pyproject.toml to src/vendor. It has experimental support for handling dependencies with C modules by downloading platform-specific wheels and copying library files to the vendor folder.
+This installs dependencies in the project's pyproject.toml to src/vendor. It has experimental support for handling dependencies with C extension modules by downloading platform-specific wheels and copying library files to the vendor folder.
 
 ### [sourcedist.py](src/ankiscripts/sourcedist.py)
 
@@ -37,3 +37,7 @@ This creates a sources zip using git-archive and git-bundle.
 ### [changes.py](src/ankiscripts/changes.py)
 
 Prints relevant changes from CHANGELOG.md given a version string. Used for GitHub release descriptions.
+
+### [restart_anki.py](src/ankiscripts/restart_anki.py)
+
+This script is intended for usage with [ankiutils](https://github.com/abdnh/ankiutils) to work around Windows permission issues while updating add-ons that depend on C extension modules.

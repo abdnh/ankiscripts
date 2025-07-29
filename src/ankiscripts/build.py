@@ -104,6 +104,14 @@ class Builder:
             " the distribution. Patterns are relative to the root directory.",
             metavar="PATTERNS",
         )
+        parser.add_argument(
+            "--build-restart-script",
+            help="Build the restart_anki.py script "
+            "to the bin/restart_anki subdirectory."
+            " Used to work around Windows permission issues when updating add-on "
+            "that rely on some modules (see the abdnh/ankiutils project).",
+            action="store_true",
+        )
 
         args = parser.parse_args()
 
@@ -125,6 +133,7 @@ class Builder:
         self.copy_patterns = ["README.md", "LICENSE*", "CHANGELOG.md"]
         if args.copy:
             self.copy_patterns.extend(args.copy.split())
+        self.should_build_restart_script = bool(args.build_restart_script)
 
     def _get_package_path(self) -> Path:
         name = self.consts["package"]
@@ -282,6 +291,22 @@ class Builder:
         scripts_dir = self.root_dir / "scripts"
         run_script(scripts_dir, "build")
 
+    def _build_restart_script(self) -> None:
+        if not self.should_build_restart_script:
+            return
+
+        subprocess.check_call(
+            [
+                "pyinstaller",
+                "--distpath",
+                str(self.src_dir / "bin"),
+                "--noconfirm",
+                "--name",
+                "restart_anki",
+                Path(__file__).parent / "restart_anki.py",
+            ]
+        )
+
     def build(self) -> None:
         self._validate_config()
         if self.dist_dir.is_dir():
@@ -301,6 +326,7 @@ class Builder:
         self._copy_package()
         self._copy_additional_files()
         self._run_custom_build_script()
+        self._build_restart_script()
         self.package_path.unlink(missing_ok=True)
         subprocess.check_call(
             [
