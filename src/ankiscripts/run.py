@@ -6,8 +6,6 @@ Anki arguments can be passed.
 import os
 from pathlib import Path
 
-import aqt
-
 from ._utils import read_addon_json, symlink_addon
 
 addon_root = Path.cwd()
@@ -31,5 +29,7 @@ env["DISABLE_QT5_COMPAT"] = "1"
 # env["TRACESQL"] = "1"
 # Sentry
 env["SENTRY_ENVIRONMENT"] = "development"
+
+import aqt  # noqa: E402
 
 aqt.run()
