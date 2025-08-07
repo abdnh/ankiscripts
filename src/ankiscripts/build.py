@@ -295,15 +295,21 @@ class Builder:
         if not self.should_build_restart_script:
             return
 
-        subprocess.check_call(
+        bin_dir = self.src_dir / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        c_source = Path(__file__).parent / "restart_anki.c"
+        exe_output = bin_dir / "restart_anki.exe"
+        subprocess.check_output(
             [
-                "pyinstaller",
-                "--distpath",
-                str(self.src_dir / "bin"),
-                "--noconfirm",
-                "--name",
-                "restart_anki",
-                Path(__file__).parent / "restart_anki.py",
+                os.environ.get("CC", "clang"),
+                "-O2",
+                "-Wall",
+                "-Wextra",
+                "-o",
+                str(exe_output),
+                str(c_source),
+                "-lshell32",
+                "-ladvapi32",
             ]
         )
 
