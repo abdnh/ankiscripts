@@ -329,10 +329,10 @@ class Builder:
         self._generate_forms()
         self._write_consts()
         self._write_version()
-        self._copy_package()
         self._copy_additional_files()
         self._run_custom_build_script()
         self._build_restart_script()
+        self._copy_package()
         self.package_path.unlink(missing_ok=True)
         subprocess.check_call(
             [
