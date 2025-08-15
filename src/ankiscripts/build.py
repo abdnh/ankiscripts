@@ -347,6 +347,10 @@ class Builder:
         )
 
 
-if __name__ == "__main__":
+def main() -> None:
     builder = Builder()
     builder.build()
+
+
+if __name__ == "__main__":
+    main()

@@ -32,7 +32,10 @@ dev = [
     "ruff",
 ]
 
-[tool.setuptools_scm]
+[project.scripts]
+build_anki_addon = "ankiscripts.build:main"
+run_anki_addon = "ankiscripts.run:main"
+update_anki_addon = "ankiscripts.update:main"
 
 [project.urls]
 Repository = "https://github.com/abdnh/ankiscripts"

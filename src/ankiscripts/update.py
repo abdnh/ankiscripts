@@ -111,7 +111,7 @@ def compare(a: str | Path, b: str | Path) -> None:
                     file.writelines(diff_lines)
 
 
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", help="Add-on root", required=False, default=".")
     parser.add_argument(
@@ -139,3 +139,7 @@ if __name__ == "__main__":
             compare(template_location, addon_path)
     else:
         compare(template_location, addon_path)
+
+
+if __name__ == "__main__":
+    main()
