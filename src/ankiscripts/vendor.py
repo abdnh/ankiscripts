@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import importlib
+import importlib.util
 import itertools
 import logging
 import shutil
@@ -10,6 +12,7 @@ import sys
 import zipfile
 from collections.abc import Iterable, Sequence
 from pathlib import Path
+from types import ModuleType
 
 import libcst as cst
 from libcst.helpers import get_full_name_for_node
@@ -19,6 +22,7 @@ from ._utils import pip_install, read_addon_json, run_script
 LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
 
 addon_root = Path.cwd()
+scripts_dir = addon_root / "scripts"
 
 
 # Set up logging for import rewrites
@@ -66,6 +70,16 @@ def _get_relative_import_level(current_file_path: Path, vendor_path: Path) -> in
     except ValueError:
         # File is outside vendor directory
         return 0
+
+
+def get_vendor_hooks() -> ModuleType | None:
+    module_path = scripts_dir / "vendor_hooks.py"
+    if module_path.exists():
+        spec = importlib.util.spec_from_file_location("vendor_hooks", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    return None
 
 
 class LibCSTImportTransformer(cst.CSTTransformer):
@@ -507,6 +521,11 @@ def rewrite_imports_with_libcst(
         # Generate new code
         new_code = new_tree.code
 
+        vendor_hooks = get_vendor_hooks()
+        if vendor_hooks and hasattr(vendor_hooks, "transform_code"):
+            import_logger.info(f"Transforming code with vendor hooks: {file_path}")
+            new_code = vendor_hooks.transform_code(file_path, new_code)
+
         # Only write if content changed
         if new_code != source_code:
             import_logger.info(f"CHANGES DETECTED in {file_path}")
@@ -840,7 +859,6 @@ def install_libs(  # noqa: PLR0912, PLR0915
 
     # Additional vendoring logic (e.g. installing node modules)
     # can be specified in scripts/vendor.(sh|ps1)
-    scripts_dir = addon_root / "scripts"
     run_script(scripts_dir, "vendor")
 
 
