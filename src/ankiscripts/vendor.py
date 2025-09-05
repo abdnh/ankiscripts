@@ -92,6 +92,10 @@ class LibCSTImportTransformer(cst.CSTTransformer):
         self.current_file_path = current_file_path
         self.vendor_path = vendor_path
         self.transformations_made = False
+        # Track whether we've already added sys import
+        # and package assignment in __init__.py
+        self._added_sys_import = False
+        self._added_package_assignment = False
 
     def _log_transformation(self, original: str, new: str, import_type: str) -> None:
         """Log an import transformation for debugging."""
@@ -105,6 +109,10 @@ class LibCSTImportTransformer(cst.CSTTransformer):
     def _get_relative_import_level(self) -> int:
         """Calculate the number of dots needed for relative import."""
         return _get_relative_import_level(self.current_file_path, self.vendor_path)
+
+    def _is_package_init_file(self) -> bool:
+        """Check if the current file is a package's __init__.py file."""
+        return self.current_file_path.name == "__init__.py"
 
     def _create_dotted_name(self, dotted_name: str) -> cst.Attribute | cst.Name:
         """Create a LibCST node for a dotted module name
@@ -289,7 +297,78 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                 ]  # Everything after the package name
                                 imported_name = parts[-1]  # The final module name
 
-                                if len(submodule_parts) == 1:
+                                # Special handling for __init__.py files
+                                if self._is_package_init_file():
+                                    # In __init__.py files, transform same-package
+                                    # submodule imports
+                                    # to relative imports but also make
+                                    # the package name available
+                                    # e.g., "import pycountry.db" becomes:
+                                    # from . import db
+                                    # import sys
+                                    # pycountry = sys.modules[__name__]
+
+                                    # Import the submodule
+                                    statements_to_add.append(
+                                        cst.ImportFrom(
+                                            module=None,
+                                            names=[
+                                                cst.ImportAlias(
+                                                    name=cst.Name(imported_name),
+                                                    asname=None,
+                                                )
+                                            ],
+                                            relative=[cst.Dot()],
+                                        )
+                                    )
+
+                                    # Import sys if not already added
+                                    if not self._added_sys_import:
+                                        statements_to_add.append(
+                                            cst.Import(
+                                                names=[
+                                                    cst.ImportAlias(
+                                                        name=cst.Name("sys")
+                                                    )
+                                                ]
+                                            )
+                                        )
+                                        self._added_sys_import = True
+
+                                    # Make the package name available as a reference
+                                    # to the current module
+                                    # Only add this once per file
+                                    if not self._added_package_assignment:
+                                        package_assignment = cst.Assign(
+                                            targets=[
+                                                cst.AssignTarget(
+                                                    target=cst.Name(package_name)
+                                                )
+                                            ],
+                                            value=cst.Subscript(
+                                                value=cst.Attribute(
+                                                    value=cst.Name("sys"),
+                                                    attr=cst.Name("modules"),
+                                                ),
+                                                slice=[
+                                                    cst.SubscriptElement(
+                                                        slice=cst.Index(
+                                                            value=cst.Name("__name__")
+                                                        )
+                                                    )
+                                                ],
+                                            ),
+                                        )
+                                        statements_to_add.append(package_assignment)
+                                        self._added_package_assignment = True
+
+                                    self._log_transformation(
+                                        f"import {module_name}",
+                                        f"from . import {imported_name}; import sys; "
+                                        f"{package_name} = sys.modules[__name__]",
+                                        "SAME_PACKAGE_INIT_TRANSFORM",
+                                    )
+                                elif len(submodule_parts) == 1:
                                     # Simple submodule: sentry_sdk.client
                                     # -> from . import client
                                     statements_to_add.append(
@@ -322,6 +401,17 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                             relative=[cst.Dot()],
                                         )
                                     )
+                            elif self._is_package_init_file():
+                                # In __init__.py, importing the package itself
+                                # doesn't make sense
+                                # and would create circular imports, so preserve as-is
+                                statements_to_add.append(stmt)
+                                self._log_transformation(
+                                    f"import {module_name}",
+                                    f"import {module_name} "
+                                    "(preserved - circular import avoided)",
+                                    "SAME_PACKAGE_INIT_CIRCULAR",
+                                )
                             else:
                                 # Simple package import: "import sentry_sdk"
                                 # -> "from .. import sentry_sdk"
