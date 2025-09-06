@@ -291,7 +291,12 @@ class Builder:
         if not ts_dir.exists():
             return
         run_npm("install", cwd=ts_dir)
+        # Sveltekit build
         run_npm("run", "build", cwd=ts_dir)
+        # Separate TS bundles for Anki pages
+        for path in (ts_dir / "src").iterdir():
+            if path.is_dir() and path.name not in ("routes", "lib"):
+                run_npm("run", "bundle_ts", path.name, cwd=path)
 
     def _run_custom_build_script(self) -> None:
         # Additional build logic can be specified in scripts/build.(sh|ps1)
