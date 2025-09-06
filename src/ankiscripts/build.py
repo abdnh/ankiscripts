@@ -1,5 +1,4 @@
 import argparse
-import contextlib
 import enum
 import io
 import json
@@ -291,8 +290,7 @@ class Builder:
         ts_dir = self.root_dir / "ts"
         if not ts_dir.exists():
             return
-        with contextlib.chdir(ts_dir):
-            subprocess.check_output([shutil.which("npm"), "run", "build"])
+        subprocess.check_output([shutil.which("npm"), "run", "build"], cwd=ts_dir)
 
     def _run_custom_build_script(self) -> None:
         # Additional build logic can be specified in scripts/build.(sh|ps1)
