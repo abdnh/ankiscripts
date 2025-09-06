@@ -74,6 +74,11 @@ def run_powershell_script(path: Path) -> int:
     return subprocess.check_call([powershell_exe, "-File", str(path)])
 
 
+def run_npm(*args: str, **kwargs: Any) -> int:
+    npm_exe = shutil.which("npm")
+    return subprocess.check_call([npm_exe, *args], **kwargs)
+
+
 def run_script(scripts_dir: Path, name: str) -> int:
     if sys.platform == "win32" and (scripts_dir / f"{name}.ps1").exists():
         script_path = scripts_dir / f"{name}.ps1"

@@ -11,7 +11,7 @@ from typing import Any
 
 import jsonschema
 
-from ._utils import read_addon_json, run_script
+from ._utils import read_addon_json, run_npm, run_script
 
 
 def with_fixes_for_qt6(code: str) -> str:
@@ -290,7 +290,8 @@ class Builder:
         ts_dir = self.root_dir / "ts"
         if not ts_dir.exists():
             return
-        subprocess.check_output([shutil.which("npm"), "run", "build"], cwd=ts_dir)
+        run_npm("install", cwd=ts_dir)
+        run_npm("run", "build", cwd=ts_dir)
 
     def _run_custom_build_script(self) -> None:
         # Additional build logic can be specified in scripts/build.(sh|ps1)
