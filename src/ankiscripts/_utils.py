@@ -74,9 +74,15 @@ def run_powershell_script(path: Path) -> int:
     return subprocess.check_call([powershell_exe, "-File", str(path)])
 
 
-def run_npm(*args: str, **kwargs: Any) -> int:
+def run_npm(
+    *args: str, wait: bool = True, **kwargs: Any
+) -> int | subprocess.Popen[Any]:
     npm_exe = shutil.which("npm")
-    return subprocess.check_call([npm_exe, *args], **kwargs)
+    return (
+        subprocess.check_call([npm_exe, *args], **kwargs)
+        if wait
+        else subprocess.Popen([npm_exe, *args], **kwargs)
+    )
 
 
 def run_script(scripts_dir: Path, name: str) -> int:

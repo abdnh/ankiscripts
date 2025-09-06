@@ -6,13 +6,21 @@ Anki arguments can be passed.
 import os
 from pathlib import Path
 
-from ._utils import read_addon_json, symlink_addon
+from ._utils import read_addon_json, run_npm, symlink_addon
+
+
+def run_sveltekit_server(package: str) -> None:
+    if not os.environ.get(f"{package.upper()}_HMR", ""):
+        return
+
+    run_npm("run", "dev", wait=False, cwd=Path.cwd() / "ts")
 
 
 def main() -> None:
     addon_root = Path.cwd()
     package = read_addon_json(addon_root).get("package") or addon_root.name
     symlink_addon(addon_root, package)
+    run_sveltekit_server(package)
 
     env = os.environ
     # Run debugger on uncaught exceptions (https://addon-docs.ankiweb.net/debugging.html#pdb)
