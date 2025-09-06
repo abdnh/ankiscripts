@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import enum
 import io
 import json
@@ -286,6 +287,13 @@ class Builder:
                     with open(path, encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
 
+    def _run_web_build(self) -> None:
+        ts_dir = self.root_dir / "ts"
+        if not ts_dir.exists():
+            return
+        with contextlib.chdir(ts_dir):
+            subprocess.check_output([shutil.which("npm"), "run", "build"])
+
     def _run_custom_build_script(self) -> None:
         # Additional build logic can be specified in scripts/build.(sh|ps1)
         scripts_dir = self.root_dir / "scripts"
@@ -330,6 +338,7 @@ class Builder:
         self._write_consts()
         self._write_version()
         self._copy_additional_files()
+        self._run_web_build()
         self._run_custom_build_script()
         self._build_restart_script()
         self._copy_package()
