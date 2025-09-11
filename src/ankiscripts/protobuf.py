@@ -152,14 +152,14 @@ class ProtobufGenerator:
         protoc_es_plugin_path = node_bin_dir / "protoc-gen-es"
         if sys.platform == "win32":
             protoc_es_plugin_path = protoc_es_plugin_path.with_suffix(".cmd")
-
+        path_sep = ";" if sys.platform == "win32" else ":"
         run_protoc(
             f"--proto_path={self.proto_dir}",
             "--plugin",
             f"{protoc_es_plugin_path}",
             f"--es_out={proto_ts_out_dir}",
             *self.proto_files,
-            env={**os.environ, "PATH": f"{node_bin_dir};{os.environ['PATH']}"},
+            env={**os.environ, "PATH": f"{node_bin_dir}{path_sep}{os.environ['PATH']}"},
         )
 
     def generate_python_services(self) -> None:
