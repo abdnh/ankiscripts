@@ -962,12 +962,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--platforms",
-        default=",".join(
-            (
-                *default_platforms_for_python_version("38"),
-                *default_platforms_for_python_version("39"),
-            )
-        ),
         help="A comma-separated list of platforms to build platform-specific "
         "dependencies for (e.g. win_amd64,manylinux_2_28_x86_64)",
     )
@@ -982,6 +976,6 @@ if __name__ == "__main__":
 
     install_libs(
         args.python_versions.split(","),
-        args.platforms.split(","),
+        args.platforms.split(",") if args.platforms else None,
         args.enable_logging,
     )
