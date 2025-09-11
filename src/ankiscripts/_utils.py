@@ -26,7 +26,7 @@ def uv(*args: Any) -> str:
     return subprocess.check_output([shutil.which("uv"), *args], encoding="utf-8")
 
 
-def pip_install(target: str | None = None) -> None:
+def pip_install(target: str | None = None, min_python_version: str = "3.8") -> None:
     target_args = []
     if target:
         target_args.extend(["--target", target])
@@ -38,6 +38,8 @@ def pip_install(target: str | None = None) -> None:
         "pyproject.toml",
         "--link-mode",
         "copy",
+        "--python-version",
+        min_python_version,
         *target_args,
     )
 

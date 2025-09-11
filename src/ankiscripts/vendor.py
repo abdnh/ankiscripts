@@ -799,7 +799,8 @@ def install_libs(  # noqa: PLR0912, PLR0915
     vendor_path = addon_root / "src" / "vendor"
     vendor_path.mkdir(exist_ok=True)
     shutil.rmtree(vendor_path)
-    pip_install(str(vendor_path))
+    min_python_version = min([(int(v[0]), int(v[1:])) for v in python_versions])
+    pip_install(str(vendor_path), ".".join(str(p) for p in min_python_version))
     bin_path = vendor_path / "bin"
     if bin_path.exists():
         shutil.rmtree(bin_path)
