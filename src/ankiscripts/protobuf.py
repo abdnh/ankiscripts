@@ -107,7 +107,7 @@ class ProtobufGenerator:
             "            data: bytes containing the raw request data",
             "            ",
             "        Returns:",
-            f"            {method.output_type} containing the response data",
+            "            bytes containing the response data",
             '        """',
             f"        request = {method.input_type}.FromString(data)",
             f"        response = cls.{method.name}(request)",
