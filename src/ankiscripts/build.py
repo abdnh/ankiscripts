@@ -288,7 +288,7 @@ class Builder:
                     with open(path, encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
 
-    def _run_web_build(self) -> None:
+    def _build_web(self) -> None:
         ts_dir = self.root_dir / "ts"
         if not ts_dir.exists():
             return
@@ -352,7 +352,7 @@ class Builder:
         self._write_version()
         self._copy_additional_files()
         self._build_proto()
-        self._run_web_build()
+        self._build_web()
         self._run_custom_build_script()
         self._build_restart_script()
         self._copy_package()
