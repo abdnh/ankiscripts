@@ -30,6 +30,9 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+    "types-psutil",
+    "types-Send2Trash",
+    "types-protobuf",
 ]
 
 [project.scripts]
