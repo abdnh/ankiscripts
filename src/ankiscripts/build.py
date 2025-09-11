@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -12,6 +13,7 @@ from typing import Any
 import jsonschema
 
 from ._utils import read_addon_json, run_npm, run_script
+from .protobuf import ProtobufGenerator
 
 
 def with_fixes_for_qt6(code: str) -> str:
@@ -295,8 +297,15 @@ class Builder:
         run_npm("run", "build", cwd=ts_dir)
         # Separate TS bundles for Anki pages
         for path in (ts_dir / "src").iterdir():
-            if path.is_dir() and path.name not in ("routes", "lib"):
+            if path.is_dir() and path.name not in ("routes", "lib", "generated"):
                 run_npm("run", "bundle_ts", path.name, cwd=path)
+
+    def _build_proto(self) -> None:
+        proto_dir = (self.root_dir / "proto").absolute()
+        if not proto_dir.exists():
+            return
+        generator = ProtobufGenerator(self.root_dir, self.src_dir)
+        generator.generate()
 
     def _run_custom_build_script(self) -> None:
         # Additional build logic can be specified in scripts/build.(sh|ps1)
@@ -343,6 +352,7 @@ class Builder:
         self._write_version()
         self._copy_additional_files()
         self._run_web_build()
+        self._build_proto()
         self._run_custom_build_script()
         self._build_restart_script()
         self._copy_package()
