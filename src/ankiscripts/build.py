@@ -288,11 +288,16 @@ class Builder:
                     with open(path, encoding="utf-8") as srcfile:
                         rel_path.write_text(srcfile.read(), encoding="utf-8")
 
-    def _build_web(self) -> None:
+    def _install_web_dependencies(self) -> None:
         ts_dir = self.root_dir / "ts"
         if not ts_dir.exists():
             return
         run_npm("install", cwd=ts_dir)
+
+    def _build_web(self) -> None:
+        ts_dir = self.root_dir / "ts"
+        if not ts_dir.exists():
+            return
         # Sveltekit build
         run_npm("run", "build", cwd=ts_dir)
         # Separate TS bundles for Anki pages
@@ -351,6 +356,7 @@ class Builder:
         self._write_consts()
         self._write_version()
         self._copy_additional_files()
+        self._install_web_dependencies()
         self._build_proto()
         self._build_web()
         self._run_custom_build_script()
