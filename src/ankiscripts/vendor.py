@@ -788,10 +788,12 @@ def install_libs(  # noqa: PLR0912, PLR0915
     if not python_versions:
         python_versions = default_python_versions()
     if not platforms:
-        platforms = itertools.chain(
-            *(
-                default_platforms_for_python_version(version)
-                for version in python_versions
+        platforms = list(
+            itertools.chain(
+                *(
+                    default_platforms_for_python_version(version)
+                    for version in python_versions
+                )
             )
         )
 
