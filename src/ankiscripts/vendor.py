@@ -711,8 +711,8 @@ def default_platforms_for_python_version(version: str) -> tuple[str, ...]:
         return ("win_amd64", "manylinux2014_x86_64", "macosx_10_7_x86_64")
     # https://github.com/ankitects/anki/blob/740528eaf913ff4bb9d112d494a10e84fd01365a/build/configure/src/python.rs#L141
     return (
-        "manylinux_2_35_x86_64",
-        "manylinux_2_35_aarch64",
+        "manylinux_2_36_x86_64",
+        "manylinux_2_36_aarch64",
         "macosx_12_0_universal2",
         "macosx_12_0_x86_64",
         "macosx_12_0_arm64",
