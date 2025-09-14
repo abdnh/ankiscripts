@@ -19,7 +19,7 @@ dependencies = [
     "questionary>=2,<3",
     "pip",
     "libcst>=0.4.0",
-    "protoletariat>=3.3.10",
+    "protoletariat",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +40,9 @@ dev = [
     "types-Send2Trash",
     "types-protobuf",
 ]
+
+[tool.uv.sources]
+protoletariat = { git = "https://github.com/abdnh/protoletariat", branch = "anki" }
 
 [project.scripts]
 build_anki_addon = "ankiscripts.build:main"

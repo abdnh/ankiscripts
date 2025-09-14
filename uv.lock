@@ -18,25 +18,31 @@ wheels = [
 
 [[package]]
 name = "anki"
-version = "25.2.7"
+version = "25.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "beautifulsoup4" },
     { name = "decorator" },
     { name = "distro", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
     { name = "markdown" },
     { name = "orjson" },
     { name = "protobuf" },
-    { name = "psutil", marker = "sys_platform == 'win32'" },
     { name = "requests", extra = ["socks"] },
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c1/9d/fab8ab4a48b32e842f83e2d4962512558610f6939f58289b9f3a437388c7/anki-25.02.7-cp39-abi3-macosx_12_0_arm64.whl", hash = "sha256:aca0ce84c73998abd4920434a7e53c037b5b3fcec9727af2ceb01687cac7a87f", size = 9032257, upload-time = "2025-06-06T06:59:44.228Z" },
-    { url = "https://files.pythonhosted.org/packages/89/85/e54b97cfb587df07f6705726d819e074a44c7d2ac792438d819b321330d1/anki-25.02.7-cp39-abi3-macosx_12_0_x86_64.whl", hash = "sha256:8410257b7e81d452436049753dbea2f5f4cf07ab134e14c89a91e6a9658bf075", size = 9499648, upload-time = "2025-06-06T06:59:47.697Z" },
-    { url = "https://files.pythonhosted.org/packages/71/40/19545c12e7d14cf00a5d669317bc39e8b0e14b538da9a1bf753a0b59269f/anki-25.02.7-cp39-abi3-manylinux_2_35_aarch64.whl", hash = "sha256:8cd97678bfe46509629e23d9906211c4a605f1d5ab30a3b08aa28bacb8fc09e3", size = 10280458, upload-time = "2025-06-06T06:59:50.092Z" },
-    { url = "https://files.pythonhosted.org/packages/f4/be/4b66f654302eb99e02f691ba1fdd1a5cd1f439d439b3b16f58aa4786836f/anki-25.02.7-cp39-abi3-manylinux_2_35_x86_64.whl", hash = "sha256:ae979f157527d2a2a9c77ffa38fd015e43f067c04e43e111c99fa2cf35612e5d", size = 10655455, upload-time = "2025-06-06T06:59:53.193Z" },
-    { url = "https://files.pythonhosted.org/packages/35/61/ec83880eddad014bd8dc2c16975e4c2662abfed8830fd1612a7ff2d396d0/anki-25.02.7-cp39-abi3-win_amd64.whl", hash = "sha256:ba257206176829a0b889473e68dec72835c023964cc11c4cea162ecf2ae7e6fd", size = 9293239, upload-time = "2025-06-06T06:59:55.634Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/1a/c619249d93ec46b032bab5ebbddff6dc57eb4e8a3683d60406bae13c2aca/anki-25.9-cp39-abi3-macosx_12_0_arm64.whl", hash = "sha256:cff31ee9ec3a0c198ee1dc0ab99a6f543ba688adbc2336b01858df4cf9f4fc81", size = 9650522, upload-time = "2025-09-06T11:33:29.45Z" },
+    { url = "https://files.pythonhosted.org/packages/76/a7/09bece0802d9d2b97493b71950bda58f06c5e12ff48774fdd01ee4f85e0a/anki-25.9-cp39-abi3-macosx_12_0_x86_64.whl", hash = "sha256:79eb0210c56bab843f0d3b235d88f50fd8084b116198d53c47c4f45b9e129071", size = 10150482, upload-time = "2025-09-06T11:33:35.763Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/3e/b61430bde7b6b54ffe2a5c26a9ce93d86fd08ab787479c8fbe2bc5961ff7/anki-25.9-cp39-abi3-manylinux_2_36_aarch64.whl", hash = "sha256:7726933f17abf4f5a14af10b91629599d69a98052e3867e1bfcce03335568344", size = 10900256, upload-time = "2025-09-06T11:33:41.514Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/56/a1603b10d38ee51b94ae2836be40cae6fc512f046cece5792aa3c896023e/anki-25.9-cp39-abi3-manylinux_2_36_x86_64.whl", hash = "sha256:5852cd00da37abfafde7baed67865c19c1b85bda2ea246e11a7a6f7625635ad8", size = 11397927, upload-time = "2025-09-06T11:33:46.758Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/f9/ca8c86dd2c47224522c3f918f7cf6c7800d1ab3c8029ecc6e4380577f152/anki-25.9-cp39-abi3-win_amd64.whl", hash = "sha256:ec397258f6bf75f384649a5c75ac9579dea0bc117ef6271907bb2a075ac5a9aa", size = 9984966, upload-time = "2025-09-06T11:33:51.911Z" },
+]
+
+[[package]]
+name = "anki-mac-helper"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/82/edb6194704defec181dddce8bc6a53c4afc72fa1f2bb4d68ffe244567767/anki_mac_helper-0.1.1-py3-none-any.whl", hash = "sha256:774a69cf9f0fe6d4b54949e2d6588a54a76ff51e78cbfc26b527d1ed3c5b34e3", size = 41812, upload-time = "2025-08-19T09:43:50.345Z" },
 ]
 
 [[package]]
@@ -86,7 +92,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4,<5" },
     { name = "libcst", specifier = ">=0.4.0" },
     { name = "pip" },
-    { name = "protoletariat", specifier = ">=3.3.10" },
+    { name = "protoletariat", git = "https://github.com/abdnh/protoletariat?branch=anki" },
     { name = "psutil", marker = "extra == 'restart-anki'" },
     { name = "pyinstaller", marker = "extra == 'restart-anki'" },
     { name = "pyqt5", marker = "extra == 'qt5'" },
@@ -114,17 +120,17 @@ dev = [
 
 [[package]]
 name = "aqt"
-version = "25.2.7"
+version = "25.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anki" },
+    { name = "anki-mac-helper", marker = "sys_platform == 'darwin'" },
     { name = "beautifulsoup4" },
     { name = "flask" },
     { name = "flask-cors" },
     { name = "jsonschema" },
     { name = "pip-system-certs", version = "4.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pip-system-certs", version = "5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "psutil", marker = "sys_platform == 'win32'" },
     { name = "pyqt6" },
     { name = "pyqt6-webengine" },
     { name = "pywin32", marker = "sys_platform == 'win32'" },
@@ -133,7 +139,7 @@ dependencies = [
     { name = "waitress" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c9/ea/9dd58dee2ac85626335b73b742f67dadfb25c4bb31fd607c1415dc9fdfc3/aqt-25.02.7-py3-none-any.whl", hash = "sha256:da45e9073c76570ddce25e0d3a27cf44b0fbe3b244c1bdaf64524556af4f39d6", size = 4207256, upload-time = "2025-06-06T06:59:58.152Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/bc/2d4decdcbb9098e1355c50d894298184567a3a7501f3a43c7dbc5827cdd8/aqt-25.9-py3-none-any.whl", hash = "sha256:4e1ab0cbdd300e89598d39290ba59fae2dc579bcaf972b9a66d9d971876f7e9d", size = 4255494, upload-time = "2025-09-06T11:33:55.93Z" },
 ]
 
 [[package]]
@@ -967,32 +973,28 @@ wheels = [
 
 [[package]]
 name = "protobuf"
-version = "5.29.5"
+version = "6.32.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/43/29/d09e70352e4e88c9c7a198d5645d7277811448d76c23b00345670f7c8a38/protobuf-5.29.5.tar.gz", hash = "sha256:bc1463bafd4b0929216c35f437a8e28731a2b7fe3d98bb77a600efced5a15c84", size = 425226, upload-time = "2025-05-28T23:51:59.82Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/a4/cc17347aa2897568beece2e674674359f911d6fe21b0b8d6268cd42727ac/protobuf-6.32.1.tar.gz", hash = "sha256:ee2469e4a021474ab9baafea6cd070e5bf27c7d29433504ddea1a4ee5850f68d", size = 440635, upload-time = "2025-09-11T21:38:42.935Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/11/6e40e9fc5bba02988a214c07cf324595789ca7820160bfd1f8be96e48539/protobuf-5.29.5-cp310-abi3-win32.whl", hash = "sha256:3f1c6468a2cfd102ff4703976138844f78ebd1fb45f49011afc5139e9e283079", size = 422963, upload-time = "2025-05-28T23:51:41.204Z" },
-    { url = "https://files.pythonhosted.org/packages/81/7f/73cefb093e1a2a7c3ffd839e6f9fcafb7a427d300c7f8aef9c64405d8ac6/protobuf-5.29.5-cp310-abi3-win_amd64.whl", hash = "sha256:3f76e3a3675b4a4d867b52e4a5f5b78a2ef9565549d4037e06cf7b0942b1d3fc", size = 434818, upload-time = "2025-05-28T23:51:44.297Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/73/10e1661c21f139f2c6ad9b23040ff36fee624310dc28fba20d33fdae124c/protobuf-5.29.5-cp38-abi3-macosx_10_9_universal2.whl", hash = "sha256:e38c5add5a311f2a6eb0340716ef9b039c1dfa428b28f25a7838ac329204a671", size = 418091, upload-time = "2025-05-28T23:51:45.907Z" },
-    { url = "https://files.pythonhosted.org/packages/6c/04/98f6f8cf5b07ab1294c13f34b4e69b3722bb609c5b701d6c169828f9f8aa/protobuf-5.29.5-cp38-abi3-manylinux2014_aarch64.whl", hash = "sha256:fa18533a299d7ab6c55a238bf8629311439995f2e7eca5caaff08663606e9015", size = 319824, upload-time = "2025-05-28T23:51:47.545Z" },
-    { url = "https://files.pythonhosted.org/packages/85/e4/07c80521879c2d15f321465ac24c70efe2381378c00bf5e56a0f4fbac8cd/protobuf-5.29.5-cp38-abi3-manylinux2014_x86_64.whl", hash = "sha256:63848923da3325e1bf7e9003d680ce6e14b07e55d0473253a690c3a8b8fd6e61", size = 319942, upload-time = "2025-05-28T23:51:49.11Z" },
-    { url = "https://files.pythonhosted.org/packages/e5/59/ca89678bb0352f094fc92f2b358daa40e3acc91a93aa8f922b24762bf841/protobuf-5.29.5-cp39-cp39-win32.whl", hash = "sha256:6f642dc9a61782fa72b90878af134c5afe1917c89a568cd3476d758d3c3a0736", size = 423025, upload-time = "2025-05-28T23:51:54.003Z" },
-    { url = "https://files.pythonhosted.org/packages/96/8b/2c62731fe3e92ddbbeca0174f78f0f8739197cdeb7c75ceb5aad3706963b/protobuf-5.29.5-cp39-cp39-win_amd64.whl", hash = "sha256:470f3af547ef17847a28e1f47200a1cbf0ba3ff57b7de50d22776607cd2ea353", size = 434906, upload-time = "2025-05-28T23:51:55.782Z" },
-    { url = "https://files.pythonhosted.org/packages/7e/cc/7e77861000a0691aeea8f4566e5d3aa716f2b1dece4a24439437e41d3d25/protobuf-5.29.5-py3-none-any.whl", hash = "sha256:6cf42630262c59b2d8de33954443d94b746c952b01434fc58a417fdbd2e84bd5", size = 172823, upload-time = "2025-05-28T23:51:58.157Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/98/645183ea03ab3995d29086b8bf4f7562ebd3d10c9a4b14ee3f20d47cfe50/protobuf-6.32.1-cp310-abi3-win32.whl", hash = "sha256:a8a32a84bc9f2aad712041b8b366190f71dde248926da517bde9e832e4412085", size = 424411, upload-time = "2025-09-11T21:38:27.427Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/f3/6f58f841f6ebafe076cebeae33fc336e900619d34b1c93e4b5c97a81fdfa/protobuf-6.32.1-cp310-abi3-win_amd64.whl", hash = "sha256:b00a7d8c25fa471f16bc8153d0e53d6c9e827f0953f3c09aaa4331c718cae5e1", size = 435738, upload-time = "2025-09-11T21:38:30.959Z" },
+    { url = "https://files.pythonhosted.org/packages/10/56/a8a3f4e7190837139e68c7002ec749190a163af3e330f65d90309145a210/protobuf-6.32.1-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:d8c7e6eb619ffdf105ee4ab76af5a68b60a9d0f66da3ea12d1640e6d8dab7281", size = 426454, upload-time = "2025-09-11T21:38:34.076Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/be/8dd0a927c559b37d7a6c8ab79034fd167dcc1f851595f2e641ad62be8643/protobuf-6.32.1-cp39-abi3-manylinux2014_aarch64.whl", hash = "sha256:2f5b80a49e1eb7b86d85fcd23fe92df154b9730a725c3b38c4e43b9d77018bf4", size = 322874, upload-time = "2025-09-11T21:38:35.509Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/f6/88d77011b605ef979aace37b7703e4eefad066f7e84d935e5a696515c2dd/protobuf-6.32.1-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:b1864818300c297265c83a4982fd3169f97122c299f56a56e2445c3698d34710", size = 322013, upload-time = "2025-09-11T21:38:37.017Z" },
+    { url = "https://files.pythonhosted.org/packages/05/9d/d6f1a8b6657296920c58f6b85f7bca55fa27e3ca7fc5914604d89cd0250b/protobuf-6.32.1-cp39-cp39-win32.whl", hash = "sha256:68ff170bac18c8178f130d1ccb94700cf72852298e016a2443bdb9502279e5f1", size = 424505, upload-time = "2025-09-11T21:38:38.415Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/cd/891bd2d23558f52392a5687b2406a741e2e28d629524c88aade457029acd/protobuf-6.32.1-cp39-cp39-win_amd64.whl", hash = "sha256:d0975d0b2f3e6957111aa3935d08a0eb7e006b1505d825f862a1fffc8348e122", size = 435825, upload-time = "2025-09-11T21:38:39.773Z" },
+    { url = "https://files.pythonhosted.org/packages/97/b7/15cc7d93443d6c6a84626ae3258a91f4c6ac8c0edd5df35ea7658f71b79c/protobuf-6.32.1-py3-none-any.whl", hash = "sha256:2601b779fc7d32a866c6b4404f9d42a3f67c5b9f3f15b4db3cccabe06b95c346", size = 169289, upload-time = "2025-09-11T21:38:41.234Z" },
 ]
 
 [[package]]
 name = "protoletariat"
 version = "3.3.10"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/abdnh/protoletariat?branch=anki#611f3d21b2059819982403256b74b12f7a1c006f" }
 dependencies = [
     { name = "click", version = "8.1.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "click", version = "8.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "protobuf" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/36/60/31c8dac4e060bce3f102195409128838fc5830e4e589f7962eb7531b4a27/protoletariat-3.3.10.tar.gz", hash = "sha256:bfa0e663fe4c9e3584101779b8b9f5a77b8af623aa25f680e0559b7d2609039b", size = 20694, upload-time = "2025-03-19T22:39:15.043Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/30/6b/d8b8fb09a31f85685d41f63d0d4a807c14aca175c71e17bebcfbf5dc768a/protoletariat-3.3.10-py3-none-any.whl", hash = "sha256:4b0ab790a1791613d9ef1c4159e03424a7f056592ca66578ba585ae96686ee2d", size = 20736, upload-time = "2025-03-19T22:39:13.679Z" },
 ]
 
 [[package]]
