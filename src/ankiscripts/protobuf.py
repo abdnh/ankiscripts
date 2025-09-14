@@ -42,6 +42,7 @@ class ProtobufGenerator:
         self.proto_files = [str(p.absolute()) for p in self.proto_dir.glob("*.proto")]
         self.services: list[Service] = []
         self.message_types: set[str] = set()
+        self.module_to_types: dict[str, list[str]] = {}
 
     def _parse_proto_files(self) -> None:
         descriptor_set_file = self.src_dir / "proto" / "descriptors.pb"
@@ -60,6 +61,12 @@ class ProtobufGenerator:
             pool.Add(file_desc_proto)
 
         for file_desc_proto in descriptor_set.file:
+            pb2_module = Path(file_desc_proto.name).stem + "_pb2"
+            for message_type in file_desc_proto.message_type:
+                self.module_to_types.setdefault(pb2_module, []).append(
+                    message_type.name
+                )
+
             if file_desc_proto.service:
                 file_desc = pool.FindFileByName(file_desc_proto.name)
                 for service_desc in file_desc.services_by_name.values():
@@ -188,17 +195,12 @@ class ProtobufGenerator:
         ]
 
         if self.message_types:
-            pb2_modules = set()
-            for proto_file in self.proto_dir.glob("*.proto"):
-                pb2_module = proto_file.stem + "_pb2"
-                pb2_modules.add(pb2_module)
-
-            for pb2_module in sorted(pb2_modules):
+            for pb2_module in sorted(self.module_to_types.keys()):
+                types_for_module = sorted(self.module_to_types[pb2_module])
                 lines.append(f"from .{pb2_module} import (")
 
-                module_types = sorted(self.message_types)
-                for i, msg_type in enumerate(module_types):
-                    comma = "," if i < len(module_types) - 1 else ""
+                for i, msg_type in enumerate(types_for_module):
+                    comma = "," if i < len(types_for_module) - 1 else ""
                     lines.append(f"    {msg_type}{comma}")
 
                 lines.append(")")
