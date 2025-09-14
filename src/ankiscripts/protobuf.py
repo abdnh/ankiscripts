@@ -6,7 +6,7 @@ from pathlib import Path
 from google.protobuf import descriptor_pb2, descriptor_pool
 from google.protobuf.descriptor import MethodDescriptor, ServiceDescriptor
 
-from ._utils import run_protoc
+from ._utils import run_protoc, run_protol
 
 
 class ServiceMethod:
@@ -140,6 +140,15 @@ class ProtobufGenerator:
             f"--proto_path={self.proto_dir}",
             f"--python_out={proto_py_out_dir}",
             f"--pyi_out={proto_py_out_dir}",
+            *self.proto_files,
+        )
+        run_protol(
+            "--create-package",
+            "--in-place",
+            "--python-out",
+            str(proto_py_out_dir),
+            "protoc",
+            f"--proto-path={self.proto_dir}",
             *self.proto_files,
         )
 

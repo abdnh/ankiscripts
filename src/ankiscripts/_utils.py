@@ -92,6 +92,11 @@ def run_protoc(*args: str, **kwargs: Any) -> int:
     return subprocess.check_call([protoc_exe, *args], **kwargs)
 
 
+def run_protol(*args: str, **kwargs: Any) -> int:
+    protol_exe = shutil.which("protol")
+    return subprocess.check_call([protol_exe, *args], **kwargs)
+
+
 def run_script(scripts_dir: Path, name: str) -> int:
     if sys.platform == "win32" and (scripts_dir / f"{name}.ps1").exists():
         script_path = scripts_dir / f"{name}.ps1"

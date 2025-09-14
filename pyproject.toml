@@ -14,7 +14,13 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dynamic = ["version"]
-dependencies = ["jsonschema>=4,<5", "questionary>=2,<3", "pip", "libcst>=0.4.0"]
+dependencies = [
+    "jsonschema>=4,<5",
+    "questionary>=2,<3",
+    "pip",
+    "libcst>=0.4.0",
+    "protoletariat>=3.3.10",
+]
 
 [project.optional-dependencies]
 qt5 = ["pyqt5"]
