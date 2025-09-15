@@ -22,14 +22,27 @@ def write_addon_json(root_dir: Path, data: dict[str, Any]) -> None:
         return json.dump(data, file)
 
 
-def uv(*args: Any) -> str:
-    return subprocess.check_output([shutil.which("uv"), *args], encoding="utf-8")
+def uv(*args: Any, **kwargs: Any) -> str:
+    return subprocess.check_output(
+        [shutil.which("uv"), *args], encoding="utf-8", **kwargs
+    )
 
 
-def pip_install(target: str | None = None, min_python_version: str = "3.8") -> None:
-    target_args = []
+def pip_install(
+    target: Path | str | None = None,
+    python_version: str = "3.8",
+    platform: str | None = None,
+    env: dict[str, str] | None = None,
+    hardlink: bool = False,
+) -> None:
+    extra_args = []
     if target:
-        target_args.extend(["--target", target])
+        extra_args.extend(["--target", str(target)])
+    if platform:
+        extra_args.extend(["--python-platform", platform])
+    kwargs = {}
+    if env:
+        kwargs["env"] = {**os.environ, **env}
     uv(
         "pip",
         "install",
@@ -37,10 +50,11 @@ def pip_install(target: str | None = None, min_python_version: str = "3.8") -> N
         "--requirements",
         "pyproject.toml",
         "--link-mode",
-        "copy",
+        "hardlink" if hardlink else "copy",
         "--python-version",
-        min_python_version,
-        *target_args,
+        python_version,
+        *extra_args,
+        **kwargs,
     )
 
 
@@ -95,6 +109,31 @@ def run_protoc(*args: str, **kwargs: Any) -> int:
 def run_protol(*args: str, **kwargs: Any) -> int:
     protol_exe = shutil.which("protol")
     return subprocess.check_call([protol_exe, *args], **kwargs)
+
+
+def run_llvm_lipo(
+    *args: str, check: bool = True, **kwargs: Any
+) -> subprocess.CompletedProcess:
+    llvm_lipo = shutil.which("llvm-lipo")
+    return subprocess.run(
+        [llvm_lipo, *args], check=check, text=True, stdout=subprocess.PIPE, **kwargs
+    )
+
+
+def create_universal_macos_binary(lib1: Path, lib2: Path, output_lib: Path) -> bool:
+    return (
+        run_llvm_lipo(
+            "-create", str(lib1), str(lib2), "-output", str(output_lib), check=False
+        ).returncode
+        == 0
+    )
+
+
+def detect_macos_lib_archs(lib: Path) -> list[str]:
+    return run_llvm_lipo(
+        "-archs",
+        str(lib),
+    ).stdout.split()
 
 
 def run_script(scripts_dir: Path, name: str) -> int:

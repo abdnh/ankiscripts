@@ -1,25 +1,28 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import difflib
 import importlib
 import importlib.util
-import itertools
 import logging
 import shutil
-import subprocess
 import sys
-import zipfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
 import libcst as cst
 from libcst.helpers import get_full_name_for_node
 
-from ._utils import pip_install, read_addon_json, run_script
-
-LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
+from ._utils import (
+    create_universal_macos_binary,
+    detect_macos_lib_archs,
+    pip_install,
+    read_addon_json,
+    run_script,
+)
 
 addon_root = Path.cwd()
 scripts_dir = addon_root / "scripts"
@@ -706,112 +709,43 @@ def default_python_versions() -> Iterable[str]:
     return versions
 
 
-def default_platforms_for_python_version(version: str) -> tuple[str, ...]:
+@dataclass
+class BuildPlatform:
+    name: str
+    env: dict[str, str] = dataclasses.field(default_factory=dict)
+
+
+def default_platforms_for_python_version(version: str) -> list[BuildPlatform]:
+    # https://github.com/ankitects/anki/blob/4506ad0c97dc543b2142bf9ee8f9717e92eab1fd/build/configure/src/python.rs#L148
+    platforms = [
+        BuildPlatform("x86_64-pc-windows-msvc"),
+        BuildPlatform("x86_64-apple-darwin"),
+    ]
     if int(version) <= 38:
-        return ("win_amd64", "manylinux2014_x86_64", "macosx_10_7_x86_64")
-    # https://github.com/ankitects/anki/blob/740528eaf913ff4bb9d112d494a10e84fd01365a/build/configure/src/python.rs#L141
-    return (
-        "manylinux_2_36_x86_64",
-        "manylinux_2_36_aarch64",
-        "macosx_12_0_universal2",
-        "macosx_12_0_x86_64",
-        "macosx_12_0_arm64",
-        "win_amd64",
-    )
-
-
-def pip_download(
-    python_exe: str,
-    package_name: str,
-    version: str,
-    python_version: str,
-    platform: str,
-    dest: str,
-) -> None:
-    try:
-        subprocess.check_call(
-            [
-                python_exe,
-                "-m",
-                "pip",
-                "download",
-                "--only-binary=:all:",
-                f"{package_name}=={version}",
-                "--python-version",
-                python_version,
-                "--implementation",
-                "cp",
-                "--platform",
-                platform,
-                "-d",
-                dest,
-            ]
+        platforms.append(
+            BuildPlatform("x86_64-manylinux2014", {"MACOSX_DEPLOYMENT_TARGET": "10.7"})
         )
-    except subprocess.CalledProcessError as exc:
-        print(str(exc), file=sys.stderr)
-
-
-def create_universal_binary(
-    x86_64_lib: Path, arm64_lib: Path, output_lib: Path
-) -> bool:
-    """Create a universal binary from x86_64 and arm64 libraries using llvm-lipo."""
-    try:
-        subprocess.check_call(
-            [
-                "llvm-lipo",
-                "-create",
-                str(x86_64_lib),
-                str(arm64_lib),
-                "-output",
-                str(output_lib),
-            ]
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(
-            f"Warning: Could not create universal binary for {output_lib}: {e}",
-            file=sys.stderr,
-        )
-        return False
     else:
-        print(f"Created universal binary: {output_lib}")
-        return True
-
-
-def install_libs(  # noqa: PLR0912, PLR0915
-    python_versions: Iterable[str] | None = None,
-    platforms: Iterable[str] | None = None,
-    enable_logging: bool = False,
-) -> None:
-    python_exe = shutil.which("python")
-    assert python_exe is not None
-
-    if not python_versions:
-        python_versions = default_python_versions()
-    if not platforms:
-        platforms = list(
-            itertools.chain(
-                *(
-                    default_platforms_for_python_version(version)
-                    for version in python_versions
-                )
-            )
+        platforms.append(
+            BuildPlatform("aarch64-apple-darwin", {"MACOSX_DEPLOYMENT_TARGET": "12.0"})
         )
+        platforms.append(BuildPlatform("x86_64-manylinux_2_36"))
+        platforms.append(BuildPlatform("aarch64-manylinux_2_36"))
 
-    addon_root = Path(".")
-    vendor_path = addon_root / "src" / "vendor"
-    vendor_path.mkdir(exist_ok=True)
-    shutil.rmtree(vendor_path)
-    min_python_version = min([(int(v[0]), int(v[1:])) for v in python_versions])
-    pip_install(str(vendor_path), ".".join(str(p) for p in min_python_version))
-    bin_path = vendor_path / "bin"
-    if bin_path.exists():
-        shutil.rmtree(bin_path)
+    return platforms
 
-    # Handle dependencies with C modules by downloading wheels for
-    # all supported platforms and copying C libraries from them
-    build_dir = addon_root / "build"
-    build_dir.mkdir(exist_ok=True)
-    for dist_info_dir in vendor_path.iterdir():
+
+LIB_EXT_GLOBS = ("*.so", "*.pyd", "*.dylib")
+
+
+def get_extension_modules(module_dir: Path) -> Iterator[Path]:
+    for pattern in LIB_EXT_GLOBS:
+        yield from module_dir.rglob(pattern)
+
+
+def get_installed_package_dirs(install_dir: Path | str) -> Iterator[Path]:
+    install_dir = Path(install_dir)
+    for dist_info_dir in install_dir.iterdir():
         if not dist_info_dir.is_dir() or not dist_info_dir.match("*.dist-info"):
             continue
         package_name = dist_info_dir.name.split("-")[0]
@@ -820,132 +754,77 @@ def install_libs(  # noqa: PLR0912, PLR0915
                 module = file.read().strip()
         except Exception:
             module = package_name
-        module_dir = vendor_path / module
-        if not any(list(module_dir.rglob(g)) for g in LIB_EXT_GLOBS):
-            continue
-        version = dist_info_dir.name.split("-")[1].rsplit(".", maxsplit=1)[0]
-        for python_version in python_versions:
-            for platform in platforms:
-                pip_download(
-                    python_exe,
-                    package_name,
-                    version,
-                    python_version,
-                    platform,
-                    str(build_dir),
-                )
+        yield install_dir / module
 
-            # Check if we have both x86_64 and arm64 macOS platforms
-            macos_platforms = [p for p in platforms if p.startswith("macosx_")]
-            has_x86_64 = any("x86_64" in p for p in macos_platforms)
-            has_arm64 = any("arm64" in p for p in macos_platforms)
-            should_create_universal = has_x86_64 and has_arm64
 
-            # Extract wheels and collect libraries by architecture
-            wheel_libs_by_arch: dict[
-                str, dict[Path, Path]
-            ] = {}  # arch -> {relative_path: absolute_path}
+def install_libs(
+    enable_logging: bool = False,
+) -> None:
+    python_exe = shutil.which("python")
+    assert python_exe is not None
 
-            for wheel_path in build_dir.glob(
-                f"{package_name}-{version}-cp{python_version}-*.whl"
-            ):
-                should_process = False
-                wheel_arch = None
-                is_macos = False
+    python_versions = default_python_versions()
+    addon_root = Path(".")
+    vendor_path = addon_root / "src" / "vendor"
+    vendor_path.mkdir(exist_ok=True)
+    shutil.rmtree(vendor_path)
+    min_python_version = min([(int(v[0]), int(v[1:])) for v in python_versions])
+    pip_install(
+        target=vendor_path, python_version=".".join(str(p) for p in min_python_version)
+    )
+    bin_path = vendor_path / "bin"
+    if bin_path.exists():
+        shutil.rmtree(bin_path)
 
-                for platform in platforms:
-                    os_name, *_, arch = platform.split("_")
-                    if arch == "64":
-                        arch = "x86_64"
-                    if os_name in wheel_path.name and arch in wheel_path.name:
-                        should_process = True
-                        wheel_arch = arch
-                        is_macos = os_name == "macosx"
-                        break
-
-                if not should_process:
-                    continue
-
-                wheel_dir = build_dir / wheel_path.stem
-                wheel_dir.mkdir(exist_ok=True)
-                with zipfile.ZipFile(wheel_path, "r") as file:
-                    file.extractall(wheel_dir)
-
-                # Collect libraries from this wheel
-                for p in (wheel_dir / module).rglob("*"):
-                    if any(p.match(g) for g in LIB_EXT_GLOBS):
-                        relative_path = p.relative_to(wheel_dir / module)
-
-                        if is_macos and wheel_arch:
-                            # Collect macOS libraries by architecture
-                            if wheel_arch not in wheel_libs_by_arch:
-                                wheel_libs_by_arch[wheel_arch] = {}
-                            wheel_libs_by_arch[wheel_arch][relative_path] = p
+    # Handle dependencies with C modules by installing dependencies for
+    # all supported Python versions and platforms separately
+    # and copying extension modules from them
+    build_dir = addon_root / "build"
+    build_dir.mkdir(exist_ok=True)
+    for python_version in python_versions:
+        for platform in default_platforms_for_python_version(python_version):
+            print(
+                "Copying extension modules for "
+                f"python_version={python_version}, platform={platform.name}"
+            )
+            install_dir = build_dir / f"{python_version}_{platform.name}_venv"
+            pip_install(
+                target=install_dir,
+                python_version=f"{python_version[0]}.{python_version[1:]}",
+                platform=platform.name,
+                env=platform.env,
+                hardlink=True,
+            )
+            for module_dir in get_installed_package_dirs(install_dir):
+                for extension_module_path in get_extension_modules(module_dir):
+                    dest_path = (
+                        vendor_path / module_dir.name / extension_module_path.name
+                    )
+                    if dest_path.exists() and "darwin" in dest_path.name:
+                        extension_module_path2 = dest_path.with_stem(
+                            dest_path.stem + "_tmp"
+                        )
+                        dest_path.rename(extension_module_path2)
+                        if create_universal_macos_binary(
+                            extension_module_path, extension_module_path2, dest_path
+                        ):
+                            print(f"Created universal binary for {module_dir.name}")
                         else:
-                            # For non-macOS, copy directly
-                            dst = module_dir / relative_path
-                            dst.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy(p, dst)
-
-                            # Process macOS libraries - prioritize universal2,
-                            # then create universal binaries, then copy individually
-            if "universal2" in wheel_libs_by_arch:
-                # Use universal2 wheel if available
-                # (already contains both architectures)
-                universal2_libs = wheel_libs_by_arch["universal2"]
-                for relative_path, lib_path in universal2_libs.items():
-                    dst = module_dir / relative_path
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy(lib_path, dst)
-                print(f"Used universal2 wheel for {package_name}")
-            elif (
-                should_create_universal
-                and "x86_64" in wheel_libs_by_arch
-                and "arm64" in wheel_libs_by_arch
-            ):
-                # Create universal binaries from separate x86_64 and arm64 wheels
-                x86_64_libs = wheel_libs_by_arch["x86_64"]
-                arm64_libs = wheel_libs_by_arch["arm64"]
-
-                # Find common libraries that exist in both architectures
-                common_libs = set(x86_64_libs.keys()) & set(arm64_libs.keys())
-                x86_64_only = set(x86_64_libs.keys()) - common_libs
-                arm64_only = set(arm64_libs.keys()) - common_libs
-
-                # Create universal binaries for common libraries
-                for relative_path in common_libs:
-                    dst = module_dir / relative_path
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-
-                    x86_64_lib = x86_64_libs[relative_path]
-                    arm64_lib = arm64_libs[relative_path]
-
-                    if not create_universal_binary(x86_64_lib, arm64_lib, dst):
-                        # Fall back to copying x86_64 version if lipo fails
-                        shutil.copy(x86_64_lib, dst)
-
-                # Copy architecture-specific macOS libraries
-                for relative_path in x86_64_only:
-                    dst = module_dir / relative_path
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy(x86_64_libs[relative_path], dst)
-
-                for relative_path in arm64_only:
-                    dst = module_dir / relative_path
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy(arm64_libs[relative_path], dst)
-
-                print(
-                    f"Created {len(common_libs)} universal binaries for {package_name}"
-                )
-            elif wheel_libs_by_arch:
-                # Copy remaining macOS libraries
-                # that weren't processed for universal binaries
-                for arch_libs in wheel_libs_by_arch.values():
-                    for relative_path, lib_path in arch_libs.items():
-                        dst = module_dir / relative_path
-                        dst.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy(lib_path, dst)
+                            path_to_use = extension_module_path2
+                            for path in (
+                                extension_module_path,
+                                extension_module_path2,
+                            ):
+                                archs = detect_macos_lib_archs(path)
+                                if "arm64" in archs:
+                                    path_to_use = path
+                                    break
+                            if dest_path.exists():
+                                dest_path.unlink()
+                            shutil.copy(path_to_use, dest_path)
+                        extension_module_path2.unlink()
+                    else:
+                        shutil.copy(extension_module_path, dest_path)
 
     # Rewrite imports in vendored packages to be relative to the vendor directory
     rewrite_imports_in_vendor_dir(vendor_path, enable_logging)
@@ -958,17 +837,6 @@ def install_libs(  # noqa: PLR0912, PLR0915
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--python-versions",
-        default=",".join(default_python_versions()),
-        help="A comma-separated list of Python versions to build "
-        "platform-specific dependencies for (e.g. 38,39)",
-    )
-    parser.add_argument(
-        "--platforms",
-        help="A comma-separated list of platforms to build platform-specific "
-        "dependencies for (e.g. win_amd64,manylinux_2_28_x86_64)",
-    )
-    parser.add_argument(
         "--enable-logging",
         action="store_true",
         help="Enable detailed logging of import rewrites to import_rewrites.log"
@@ -978,7 +846,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     install_libs(
-        args.python_versions.split(","),
-        args.platforms.split(",") if args.platforms else None,
         args.enable_logging,
     )
