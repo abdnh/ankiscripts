@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import difflib
 import importlib
 import importlib.util
 import logging
+import os
 import shutil
 import sys
 from collections.abc import Iterable, Iterator, Sequence
@@ -650,12 +650,11 @@ def rewrite_imports_with_libcst(
         )
 
 
-def rewrite_imports_in_vendor_dir(
-    vendor_path: Path, enable_logging: bool = False
-) -> None:
+def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
     """Rewrite imports in all Python files within the vendor directory using LibCST."""
-    # Reconfigure the global logger based on the enable_logging parameter
+    # Reconfigure the global logger
     global import_logger
+    enable_logging = os.environ.get("ANKISCRIPTS_LOGGING", "") == "1"
     import_logger = setup_import_rewrite_logging(enable_logging)
 
     vendored_packages = set()
@@ -757,9 +756,7 @@ def get_installed_package_dirs(install_dir: Path | str) -> Iterator[Path]:
         yield install_dir / module
 
 
-def install_libs(
-    enable_logging: bool = False,
-) -> None:
+def install_libs() -> None:
     python_exe = shutil.which("python")
     assert python_exe is not None
 
@@ -827,7 +824,7 @@ def install_libs(
                         shutil.copy(extension_module_path, dest_path)
 
     # Rewrite imports in vendored packages to be relative to the vendor directory
-    rewrite_imports_in_vendor_dir(vendor_path, enable_logging)
+    rewrite_imports_in_vendor_dir(vendor_path)
 
     # Additional vendoring logic (e.g. installing node modules)
     # can be specified in scripts/vendor.(sh|ps1)
@@ -835,16 +832,4 @@ def install_libs(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--enable-logging",
-        action="store_true",
-        help="Enable detailed logging of import rewrites to import_rewrites.log"
-        " (default: disabled)",
-    )
-
-    args = parser.parse_args()
-
-    install_libs(
-        args.enable_logging,
-    )
+    install_libs()
