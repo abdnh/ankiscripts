@@ -146,7 +146,7 @@ class ProtobufGenerator:
         run_protoc(
             f"--proto_path={self.proto_dir}",
             f"--python_out={proto_py_out_dir}",
-            f"--pyi_out={proto_py_out_dir}",
+            f"--mypy_out={proto_py_out_dir}",
             *self.proto_files,
         )
         run_protol(

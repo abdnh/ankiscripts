@@ -20,6 +20,7 @@ dependencies = [
     "pip",
     "libcst>=0.4.0",
     "protoletariat",
+    "mypy-protobuf",
 ]
 
 [project.optional-dependencies]
