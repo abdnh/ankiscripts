@@ -302,7 +302,7 @@ class Builder:
         # Separate TS bundles for Anki pages
         for path in (ts_dir / "src").iterdir():
             if path.is_dir() and path.name not in ("routes", "lib", "generated"):
-                run_npm("run", "bundle_ts", path.name, cwd=path)
+                run_npm("run", "bundle_ts", path.name, cwd=ts_dir)
 
     def _build_proto(self) -> None:
         proto_dir = (self.root_dir / "proto").absolute()
