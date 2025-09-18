@@ -113,7 +113,11 @@ class Builder:
             "that rely on some modules (see the abdnh/ankiutils project).",
             action="store_true",
         )
-
+        parser.add_argument(
+            "--include-version",
+            help="Include the version in the package name",
+            action="store_true",
+        )
         args = parser.parse_args()
 
         self.root_dir = Path(args.root).resolve()
@@ -128,7 +132,12 @@ class Builder:
         )
         self.consts = self._read_addon_json()
         self.should_write_consts = bool(args.consts)
-        self.package_path = Path(args.out) if args.out else self._get_package_path()
+        self.version = self._read_version()
+        self.package_path = (
+            Path(args.out)
+            if args.out
+            else self._get_package_path(include_version=args.include_version)
+        )
         self.excludes: list[str] = list(args.exclude) if args.exclude else []
         self.excludes.extend(["meta.json", "py.typed", ".version"])
         self.copy_patterns = ["README.md", "LICENSE*", "CHANGELOG.md"]
@@ -136,12 +145,14 @@ class Builder:
             self.copy_patterns.extend(args.copy.split())
         self.should_build_restart_script = bool(args.build_restart_script)
 
-    def _get_package_path(self) -> Path:
+    def _get_package_path(self, include_version: bool) -> Path:
         name = self.consts["package"]
         if self.build_type == "ankiweb":
             name += "_ankiweb"
         if self.qt_version in (QtVersion.QT5, QtVersion.QT6):
             name += f"_{self.qt_version.value}"
+        if include_version and self.version:
+            name += f"-{self.version}"
         name += ".ankiaddon"
 
         return self.build_dir / name
@@ -151,6 +162,17 @@ class Builder:
         for k, v in self.extra_manifest.items():
             data[k] = v
         return data
+
+    def _read_version(self) -> str | None:
+        try:
+            version = (
+                subprocess.check_output(["git", "describe", "--tags"])
+                .decode("utf-8")
+                .strip()
+            )
+        except subprocess.CalledProcessError:
+            return None
+        return version
 
     def _validate_config(self) -> None:
         instance_path = self.src_dir / "config.json"
@@ -258,14 +280,9 @@ class Builder:
             file.write(s)
 
     def _write_version(self) -> None:
-        try:
-            version = subprocess.check_output(["git", "describe", "--tags"]).decode(
-                "utf-8"
-            )
-        except subprocess.CalledProcessError:
-            return
-        with open(self.dist_dir / ".version", "w", encoding="utf-8") as file:
-            file.write(version)
+        if self.version:
+            with open(self.dist_dir / ".version", "w", encoding="utf-8") as file:
+                file.write(f"{self.version}\n")
 
     def _copy_package(self) -> None:
         for dirpath, _, filenames in os.walk(self.src_dir):
