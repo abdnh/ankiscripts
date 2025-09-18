@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import shutil
 from collections.abc import Iterable, Iterator
@@ -86,7 +87,16 @@ def get_installed_package_dirs(install_dir: Path | str) -> Iterator[Path]:
         yield install_dir / module
 
 
-def install_libs() -> None:
+def remove_excluded_paths(vendor_path: Path, exclude: list[str]) -> None:
+    for pattern in exclude:
+        for path in vendor_path.glob(pattern):
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+
+
+def install_libs(exclude: list[str]) -> None:
     python_exe = shutil.which("python")
     assert python_exe is not None
 
@@ -160,6 +170,17 @@ def install_libs() -> None:
     # can be specified in scripts/vendor.(sh|ps1)
     run_script(scripts_dir, "vendor")
 
+    remove_excluded_paths(vendor_path, exclude)
+
 
 if __name__ == "__main__":
-    install_libs()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--exclude",
+        help="Exclude paths relative to src/vendor matching given glob",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+    )
+    args = parser.parse_args()
+    install_libs(args.exclude)
