@@ -13,6 +13,7 @@ import jsonschema
 
 from ._utils import read_addon_json, run_npm, run_script
 from .protobuf import ProtobufGenerator
+from .rewrite_imports import rewrite_imports_in_vendor_dir
 
 
 def with_fixes_for_qt6(code: str) -> str:
@@ -327,6 +328,7 @@ class Builder:
             return
         generator = ProtobufGenerator(self.root_dir, self.src_dir)
         generator.generate()
+        rewrite_imports_in_vendor_dir(self.src_dir / "vendor", self.src_dir / "proto")
 
     def _run_custom_build_script(self) -> None:
         # Additional build logic can be specified in scripts/build.(sh|ps1)

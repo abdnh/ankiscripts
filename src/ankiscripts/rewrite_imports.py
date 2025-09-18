@@ -219,7 +219,7 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                     if level == 0:
                         # File is outside vendor directory
                         # For "import sentry_sdk.integrations.dedupe",
-                        # create "from .vendor.sentry_sdk.integrations import dedupe"
+                        # create "from ..vendor.sentry_sdk.integrations import dedupe"
                         if "." in module_name:
                             parts = module_name.split(".")
                             package_part = parts[0]  # sentry_sdk
@@ -246,7 +246,7 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                             asname=alias.asname,
                                         )
                                     ],
-                                    relative=[cst.Dot()],
+                                    relative=[cst.Dot(), cst.Dot()],
                                 )
                             )
                         else:
@@ -263,7 +263,7 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                             asname=alias.asname,
                                         )
                                     ],
-                                    relative=[cst.Dot()],
+                                    relative=[cst.Dot(), cst.Dot()],
                                 )
                             )
                     else:
@@ -499,7 +499,7 @@ class LibCSTImportTransformer(cst.CSTTransformer):
                                     cst.ImportFrom(
                                         module=vendor_module,
                                         names=self._clean_import_names(stmt.names),
-                                        relative=[cst.Dot()],
+                                        relative=[cst.Dot(), cst.Dot()],
                                     )
                                 )
                             else:
@@ -597,6 +597,14 @@ def rewrite_imports_with_libcst(
         # Generate new code
         new_code = new_tree.code
 
+        # Force pure-Python Protobuf backend to avoid conflicts with Anki's version
+        if file_path.name == "api_implementation.py" and any(
+            p.name == "protobuf" for p in file_path.parents
+        ):
+            new_code = new_code.replace(
+                "_implementation_type = None", "_implementation_type = 'python'"
+            )
+
         vendor_hooks = get_vendor_hooks()
         if vendor_hooks and hasattr(vendor_hooks, "transform_code"):
             import_logger.info(f"Transforming code with vendor hooks: {file_path}")
@@ -633,13 +641,19 @@ def rewrite_imports_with_libcst(
         )
 
 
-def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
+def rewrite_imports_in_vendor_dir(
+    vendor_path: Path, src_path: Path | None = None
+) -> None:
     """Rewrite imports in all Python files within the vendor directory using LibCST."""
     # Reconfigure the global logger
     global import_logger
     enable_logging = os.environ.get("ANKISCRIPTS_LOGGING", "") == "1"
     import_logger = setup_import_rewrite_logging(enable_logging)
 
+    if not src_path:
+        src_path = vendor_path
+    if src_path.parent != vendor_path.parent:
+        raise Exception("src_path and vendor_path must be in the same parent directory")  # noqa: TRY002, TRY003
     vendored_packages = set()
 
     for item in vendor_path.iterdir():
@@ -656,7 +670,7 @@ def rewrite_imports_in_vendor_dir(vendor_path: Path) -> None:
 
     print(f"Found vendored packages: {', '.join(sorted(vendored_packages))}")
 
-    python_files = list(vendor_path.rglob("*.py"))
+    python_files = list(src_path.rglob("*.py"))
     print(f"Rewriting imports in {len(python_files)} Python files...")
 
     for py_file in python_files:
