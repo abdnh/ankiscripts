@@ -87,7 +87,9 @@ def get_installed_package_dirs(install_dir: Path | str) -> Iterator[Path]:
         yield install_dir / module
 
 
-def remove_excluded_paths(vendor_path: Path, exclude: list[str]) -> None:
+def remove_excluded_paths(vendor_path: Path, exclude: list[str] | None = None) -> None:
+    if exclude is None:
+        return
     for pattern in exclude:
         for path in vendor_path.glob(pattern):
             if path.is_dir():
@@ -96,7 +98,7 @@ def remove_excluded_paths(vendor_path: Path, exclude: list[str]) -> None:
                 path.unlink()
 
 
-def install_libs(exclude: list[str]) -> None:
+def install_libs(exclude: list[str] | None = None) -> None:
     python_exe = shutil.which("python")
     assert python_exe is not None
 
