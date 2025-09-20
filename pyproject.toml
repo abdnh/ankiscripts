@@ -21,6 +21,8 @@ dependencies = [
     "libcst>=0.4.0",
     "protoletariat",
     "mypy-protobuf",
+    "tomli>=2.2.1",
+    "vermin>=1.6.0",
 ]
 
 [project.optional-dependencies]

@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import tomli
+
 
 def read_addon_json(root_dir: Path) -> dict[str, Any]:
     try:
@@ -22,8 +24,13 @@ def write_addon_json(root_dir: Path, data: dict[str, Any]) -> None:
         return json.dump(data, file)
 
 
-def uv(*args: Any, **kwargs: Any) -> str:
-    return subprocess.check_output(
+def read_pyproject_toml(root_dir: Path) -> dict[str, Any]:
+    with open(root_dir / "pyproject.toml", "rb") as file:
+        return tomli.load(file)
+
+
+def uv(*args: Any, **kwargs: Any) -> int:
+    return subprocess.check_call(
         [shutil.which("uv"), *args], encoding="utf-8", **kwargs
     )
 

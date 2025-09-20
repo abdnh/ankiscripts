@@ -55,6 +55,8 @@ dependencies = [
     { name = "pip" },
     { name = "protoletariat" },
     { name = "questionary" },
+    { name = "tomli" },
+    { name = "vermin" },
 ]
 
 [package.optional-dependencies]
@@ -102,8 +104,10 @@ requires-dist = [
     { name = "pyqt6", marker = "extra == 'qt6'" },
     { name = "questionary", specifier = ">=2,<3" },
     { name = "send2trash", marker = "extra == 'restart-anki'" },
+    { name = "tomli", specifier = ">=2.2.1" },
     { name = "types-psutil", marker = "extra == 'restart-anki'" },
     { name = "types-send2trash", marker = "extra == 'restart-anki'" },
+    { name = "vermin", specifier = ">=1.6.0" },
 ]
 provides-extras = ["qt5", "qt6", "forms", "restart-anki"]
 
@@ -1677,6 +1681,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/8a/78/16493d9c386d8e60e442a35feac5e00f0913c0f4b7c217c11e8ec2ff53e0/urllib3-2.4.0.tar.gz", hash = "sha256:414bc6535b787febd7567804cc015fee39daab8ad86268f1310a9250697de466", size = 390672, upload-time = "2025-04-10T15:23:39.232Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6b/11/cc635220681e93a0183390e26485430ca2c7b5f9d33b15c74c2861cb8091/urllib3-2.4.0-py3-none-any.whl", hash = "sha256:4e16665048960a0900c702d4a66415956a584919c03361cac9f1df5c5dd7e813", size = 128680, upload-time = "2025-04-10T15:23:37.377Z" },
+]
+
+[[package]]
+name = "vermin"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/26/7b871396c33006c445c25ef7da605ecbd6cef830d577b496d2b73a554f9d/vermin-1.6.0.tar.gz", hash = "sha256:6266ca02f55d1c2aa189a610017c132eb2d1934f09e72a955b1eb3820ee6d4ef", size = 93181, upload-time = "2023-11-25T20:58:25.406Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/98/1a2ca43e6d646421eea16ec19977e2e6d1ea9079bd9d873bfae513d43f1c/vermin-1.6.0-py2.py3-none-any.whl", hash = "sha256:f1fa9ee40f59983dc40e0477eb2b1fa8061a3df4c3b2bcf349add462a5610efb", size = 90845, upload-time = "2023-11-25T20:58:22.69Z" },
 ]
 
 [[package]]
