@@ -24,7 +24,7 @@ def run_vermin(min_version: str) -> int:
         "--no-make-paths-absolute",
         "--no-tips",
         "--exclude-regex",
-        r"^src[/\\]vendor[/\\]",
+        r"^src[/\\](vendor|proto)[/\\]",
         "src",
     ]
     try:
