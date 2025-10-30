@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -153,3 +154,49 @@ def run_script(scripts_dir: Path, name: str) -> int:
             return run_powershell_script(script_path)
         return run_bash_script(script_path)
     return 0
+
+
+MAX_ANKI_VERSION = 999999
+
+
+def get_min_max_anki_versions(addon_root: Path) -> tuple[int, int]:
+    addon_meta = read_addon_json(addon_root)
+    min_point_version = int(addon_meta.get("min_point_version", 0))
+    max_point_version = abs(int(addon_meta.get("max_point_version", MAX_ANKI_VERSION)))
+    return min_point_version, max_point_version
+
+
+def get_supported_python_versions(
+    min_anki_point: int, max_anki_point: int
+) -> list[tuple[int, ...]]:
+    versions: list[tuple[int, ...]] = []
+    if min_anki_point < 17:
+        versions.append((3, 6))
+    if min_anki_point < 36:
+        versions.append((3, 7))
+    if min_anki_point < 50:
+        versions.append((3, 8))
+    if max_anki_point >= 50:
+        versions.append((3, 9))
+    if max_anki_point >= 250700:
+        versions.append((3, 13))
+
+    return versions
+
+
+def read_python_version(addon_root: Path) -> tuple[int, ...]:
+    "Read Python version from .python-version"
+    version_str = (addon_root / ".python-version").read_text(encoding="utf-8").strip()
+    return tuple(int(p) for p in version_str.split("."))
+
+
+def read_dependency_version(addon_root: Path, package: str) -> tuple[int, ...] | None:
+    "Read a pinned depedency version from uv.lock"
+
+    uvlock = (addon_root / "uv.lock").read_text(encoding="utf-8")
+    match = re.search(
+        rf'\[\[package\]\]\nname = "{package}"\nversion = "(.*?)"', uvlock
+    )
+    if not match:
+        return None
+    return tuple(int(p) for p in match.group(1).split("."))

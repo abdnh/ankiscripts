@@ -23,6 +23,8 @@ dependencies = [
     "mypy-protobuf",
     "tomli>=2.2.1",
     "vermin>=1.6.0",
+    "requests>=2.32.4",
+    "types-requests>=2.32.4.20250913",
 ]
 
 [project.optional-dependencies]
