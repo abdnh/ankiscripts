@@ -227,6 +227,8 @@ class ProtobufGenerator:
                     f"    server.add_proto_handler('{service.full_name}',"
                     f" '{method.original_name}', {service.name}.{method.name}_raw)"
                 )
+        if not any(service.methods for service in self.services):
+            lines.append("    pass")
         code = "\n".join(lines) + "\n"
         routes_file = self.src_dir / "proto" / "routes.py"
         routes_file.write_text(code, encoding="utf-8")
