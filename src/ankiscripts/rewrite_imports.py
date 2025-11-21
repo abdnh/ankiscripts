@@ -5,7 +5,6 @@ import importlib
 import importlib.util
 import logging
 import os
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 from types import ModuleType
@@ -47,14 +46,13 @@ import_logger = setup_import_rewrite_logging()
 
 
 def _get_relative_import_level(current_file_path: Path, vendor_path: Path) -> int:
-    """Calculate the number of dots needed for relative import."""
     try:
-        # Get relative path from current file to vendor directory
         rel_path = current_file_path.relative_to(vendor_path)
-        # Number of parent directories to go up
-        return len(rel_path.parts) - 1  # -1 because file itself doesn't count
+        return len(rel_path.parts)
     except ValueError:
         # File is outside vendor directory
+        # We assume it's one level deep inside a sibling directory
+        # (e.g. src/proto/backend_pb2.py)
         return 0
 
 
@@ -158,403 +156,362 @@ class LibCSTImportTransformer(cst.CSTTransformer):
 
         return cleaned_names
 
-    def leave_SimpleStatementLine(  # noqa: PLR0912, PLR0915
+    def _handle_import_statement(self, stmt: cst.Import) -> list[cst.CSTNode]:  # noqa: PLR0912, PLR0915
+        new_statements: list[cst.CSTNode] = []
+        new_imports = []
+        vendored_imports: list[cst.ImportAlias] = []
+
+        for name_item in stmt.names:
+            module_name = get_full_name_for_node(name_item.name)
+            package_name = module_name.split(".")[0]
+            if package_name in self.vendored_packages:
+                vendored_imports.append(name_item)
+                # Log the import that will be transformed
+                original_import = f"import {module_name}"
+                if name_item.asname:
+                    alias_name = (
+                        get_full_name_for_node(name_item.asname.name)
+                        if name_item.asname.name
+                        else "unknown"
+                    )
+                    original_import += f" as {alias_name}"
+                import_logger.info(
+                    f"FILE: {self.current_file_path} -"
+                    " WILL TRANSFORM: {original_import}"
+                )
+            else:
+                new_imports.append(name_item)
+
+        # Add non-vendored imports
+        if new_imports:
+            new_statements.append(cst.Import(names=new_imports))
+
+        # Add vendored imports as ImportFrom statements
+        level = self._get_relative_import_level()
+        for alias in vendored_imports:
+            module_name = get_full_name_for_node(alias.name)
+
+            original_import = f"import {module_name}"
+            if alias.asname:
+                original_import += f" as {get_full_name_for_node(alias.asname.name)}"
+
+            if level == 0:
+                if "." in module_name:
+                    parts = module_name.split(".")
+                    package_part = parts[0]  # sentry_sdk
+                    submodule_parts = parts[1:]  # ['integrations', 'dedupe']
+                    imported_name = parts[-1]  # dedupe
+
+                    # Create vendor.sentry_sdk.integrations
+                    vendor_module = cst.Attribute(
+                        value=cst.Name("vendor"), attr=cst.Name(package_part)
+                    )
+                    for part in submodule_parts[:-1]:  # All except the last part
+                        vendor_module = cst.Attribute(
+                            value=vendor_module, attr=cst.Name(part)
+                        )
+
+                    new_statements.append(
+                        cst.ImportFrom(
+                            module=vendor_module,
+                            names=[
+                                cst.ImportAlias(
+                                    name=cst.Name(imported_name),
+                                    asname=alias.asname,
+                                )
+                            ],
+                            relative=[cst.Dot(), cst.Dot()],
+                        )
+                    )
+                else:
+                    # Simple import like "import sentry_sdk"
+                    new_statements.append(
+                        cst.ImportFrom(
+                            module=cst.Name(value="vendor"),
+                            names=[
+                                cst.ImportAlias(
+                                    name=cst.Name(module_name),
+                                    asname=alias.asname,
+                                )
+                            ],
+                            relative=[cst.Dot(), cst.Dot()],
+                        )
+                    )
+                continue
+
+            current_package = self.current_file_path.parent.name
+            package_name = module_name.split(".")[0]
+            if package_name == current_package:
+                # Importing from same package
+                if "." in module_name:
+                    # Submodule import:
+                    # "import sentry_sdk.integrations.dedupe"
+                    # -> "from .integrations import dedupe"
+                    parts = module_name.split(".")
+                    submodule_parts = parts[1:]  # Everything after the package name
+                    imported_name = parts[-1]  # The final module name
+
+                    # Special handling for __init__.py files
+                    if self._is_package_init_file():
+                        # In __init__.py files, transform same-package
+                        # submodule imports
+                        # to relative imports but also make
+                        # the package name available
+                        # e.g., "import pycountry.db" becomes:
+                        # from . import db
+                        # import sys
+                        # pycountry = sys.modules[__name__]
+
+                        # Import the submodule
+                        new_statements.append(
+                            cst.ImportFrom(
+                                module=None,
+                                names=[
+                                    cst.ImportAlias(
+                                        name=cst.Name(imported_name),
+                                        asname=None,
+                                    )
+                                ],
+                                relative=[cst.Dot()],
+                            )
+                        )
+
+                        # Import sys if not already added
+                        if not self._added_sys_import:
+                            new_statements.append(
+                                cst.Import(
+                                    names=[cst.ImportAlias(name=cst.Name("sys"))]
+                                )
+                            )
+                            self._added_sys_import = True
+
+                        # Make the package name available as a reference
+                        # to the current module
+                        # Only add this once per file
+                        if not self._added_package_assignment:
+                            package_assignment = cst.Assign(
+                                targets=[
+                                    cst.AssignTarget(target=cst.Name(package_name))
+                                ],
+                                value=cst.Subscript(
+                                    value=cst.Attribute(
+                                        value=cst.Name("sys"),
+                                        attr=cst.Name("modules"),
+                                    ),
+                                    slice=[
+                                        cst.SubscriptElement(
+                                            slice=cst.Index(value=cst.Name("__name__"))
+                                        )
+                                    ],
+                                ),
+                            )
+                            new_statements.append(package_assignment)
+                            self._added_package_assignment = True
+
+                        self._log_transformation(
+                            f"import {module_name}",
+                            f"from . import {imported_name}; import sys; "
+                            f"{package_name} = sys.modules[__name__]",
+                            "SAME_PACKAGE_INIT_TRANSFORM",
+                        )
+                    elif len(submodule_parts) == 1:
+                        # Simple submodule: sentry_sdk.client
+                        # -> from . import client
+                        new_statements.append(
+                            cst.ImportFrom(
+                                module=None,
+                                names=[
+                                    cst.ImportAlias(
+                                        name=cst.Name(imported_name),
+                                        asname=alias.asname,
+                                    )
+                                ],
+                                relative=[cst.Dot()],
+                            )
+                        )
+                    else:
+                        # Nested submodule: sentry_sdk.integrations.dedupe
+                        # -> from .integrations import dedupe
+                        submodule_path = ".".join(submodule_parts[:-1])
+                        new_statements.append(
+                            cst.ImportFrom(
+                                module=self._create_module_for_import_from(
+                                    submodule_path
+                                ),
+                                names=[
+                                    cst.ImportAlias(
+                                        name=cst.Name(imported_name),
+                                        asname=alias.asname,
+                                    )
+                                ],
+                                relative=[cst.Dot()],
+                            )
+                        )
+                elif self._is_package_init_file():
+                    # In __init__.py, importing the package itself
+                    # doesn't make sense
+                    # and would create circular imports, so preserve as-is
+                    new_statements.append(stmt)
+                    self._log_transformation(
+                        f"import {module_name}",
+                        f"import {module_name} (preserved - circular import avoided)",
+                        "SAME_PACKAGE_INIT_CIRCULAR",
+                    )
+                else:
+                    # Simple package import: "import sentry_sdk"
+                    # -> "from .. import sentry_sdk"
+                    dots = [cst.Dot()] * level
+                    new_statements.append(
+                        cst.ImportFrom(
+                            module=None,
+                            names=[
+                                cst.ImportAlias(
+                                    name=cst.Name(package_name),
+                                    asname=alias.asname,
+                                )
+                            ],
+                            relative=dots,
+                        )
+                    )
+            elif "." in module_name:
+                # Importing from different package
+                # Submodule import: "import requests.auth.basic"
+                # -> "from ..requests.auth import basic"
+                parts = module_name.split(".")
+                package_name = parts[0]
+                submodule_parts = parts[1:]
+                imported_name = parts[-1]
+                submodule_path = ".".join(submodule_parts[:-1])
+                if len(submodule_parts) == 1:
+                    # requests.auth -> from ..requests import auth
+                    module_node = cst.Name(package_name)
+                else:
+                    # requests.auth.basic ->
+                    # from ..requests.auth import basic
+                    module_node = cst.Attribute(
+                        value=cst.Name(package_name),
+                        attr=self._create_dotted_name(submodule_path),  # type: ignore
+                    )
+                # TODO: should we make the base package import available?
+                # new_statements.append(
+                #     cst.ImportFrom(
+                #         module=None,
+                #         names=[
+                #             cst.ImportAlias(
+                #                 name=cst.Name(package_name),
+                #             )
+                #         ],
+                #         relative=[cst.Dot()] * level,
+                #     )
+                # )
+                new_statements.append(
+                    cst.ImportFrom(
+                        module=module_node,
+                        names=[
+                            cst.ImportAlias(
+                                name=cst.Name(imported_name),
+                                asname=alias.asname,
+                            )
+                        ],
+                        relative=[cst.Dot()] * level,
+                    )
+                )
+            else:
+                # Simple package import: "import requests"
+                # -> "from .. import requests"
+                dots = [cst.Dot()] * level
+                new_statements.append(
+                    cst.ImportFrom(
+                        module=None,
+                        names=[
+                            cst.ImportAlias(
+                                name=cst.Name(module_name),
+                                asname=alias.asname,
+                            )
+                        ],
+                        relative=dots,
+                    )
+                )
+
+        return new_statements
+
+    def _handle_importfrom_statement(self, stmt: cst.ImportFrom) -> list[cst.CSTNode]:
+        if not stmt.module or stmt.relative:
+            return [stmt]
+        module_name = get_full_name_for_node(stmt.module)
+        package_name = module_name.split(".")[0]
+        if package_name == "vendor" and len(module_name.split(".")) > 1:
+            package_name = module_name.split(".")[1]
+        if package_name not in self.vendored_packages:
+            return [stmt]
+
+        new_statements: list[cst.CSTNode] = []
+        level = self._get_relative_import_level()
+        if level == 0:
+            vendor_module = cst.Attribute(
+                value=cst.Name("vendor"),
+                attr=self._create_dotted_name(module_name),  # type: ignore
+            )
+            new_statements.append(
+                cst.ImportFrom(
+                    module=vendor_module,
+                    names=self._clean_import_names(stmt.names),
+                    relative=[cst.Dot(), cst.Dot()],
+                )
+            )
+            return new_statements
+
+        current_package = self.current_file_path.parent.name
+        if package_name == current_package:
+            # Importing from same package
+            if module_name == package_name:
+                # Direct import: "from sentry_sdk import Hub"
+                # -> "from . import Hub"
+                new_statements.append(
+                    cst.ImportFrom(
+                        module=None,
+                        names=self._clean_import_names(stmt.names),
+                        relative=[cst.Dot()],
+                    )
+                )
+            else:
+                # Submodule import:
+                # "from sentry_sdk.integrations.dedupe import
+                # something"
+                # -> "from .integrations.dedupe import
+                # something"
+                submodule = module_name[len(package_name) + 1 :]
+                new_statements.append(
+                    cst.ImportFrom(
+                        module=self._create_module_for_import_from(submodule),
+                        names=self._clean_import_names(stmt.names),
+                        relative=[cst.Dot()],
+                    )
+                )
+        else:
+            # Importing from different package
+            dots = [cst.Dot()] * level
+            new_statements.append(
+                cst.ImportFrom(
+                    module=self._create_module_for_import_from(module_name),
+                    names=self._clean_import_names(stmt.names),
+                    relative=dots,
+                )
+            )
+        return new_statements
+
+    def leave_SimpleStatementLine(
         self,
         original_node: cst.SimpleStatementLine,
         updated_node: cst.SimpleStatementLine,
-    ) -> (
-        cst.BaseStatement | cst.FlattenSentinel[cst.BaseStatement] | cst.RemovalSentinel
-    ):
-        """Handle import statements within simple statement lines."""
+    ) -> cst.SimpleStatementLine:
         new_statements: list[cst.CSTNode | None] = []
 
         for stmt in updated_node.body:
             if isinstance(stmt, cst.Import):
-                # Handle 'import package' statements
-                new_imports = []
-                vendored_imports = []
-
-                for name_item in stmt.names:
-                    if isinstance(name_item, cst.ImportAlias):
-                        module_name = get_full_name_for_node(name_item.name)
-                        if module_name:
-                            package_name = module_name.split(".")[0]
-                            if package_name in self.vendored_packages:
-                                vendored_imports.append(name_item)
-                                # Log the import that will be transformed
-                                original_import = f"import {module_name}"
-                                if name_item.asname:
-                                    alias_name = (
-                                        get_full_name_for_node(name_item.asname.name)
-                                        if name_item.asname.name
-                                        else "unknown"
-                                    )
-                                    original_import += f" as {alias_name}"
-                                import_logger.info(
-                                    f"FILE: {self.current_file_path} -"
-                                    " WILL TRANSFORM: {original_import}"
-                                )
-                            else:
-                                new_imports.append(name_item)
-
-                statements_to_add: list[cst.CSTNode] = []
-
-                # Add non-vendored imports
-                if new_imports:
-                    statements_to_add.append(cst.Import(names=new_imports))
-
-                # Add vendored imports as ImportFrom statements
-                level = self._get_relative_import_level()
-                for alias in vendored_imports:
-                    module_name = get_full_name_for_node(alias.name)
-                    if not module_name:
-                        continue
-
-                    original_import = f"import {module_name}"
-                    if alias.asname:
-                        original_import += (
-                            f" as {get_full_name_for_node(alias.asname.name)}"
-                        )
-
-                    if level == 0:
-                        # File is outside vendor directory
-                        # For "import sentry_sdk.integrations.dedupe",
-                        # create "from ..vendor.sentry_sdk.integrations import dedupe"
-                        if "." in module_name:
-                            parts = module_name.split(".")
-                            package_part = parts[0]  # sentry_sdk
-                            submodule_parts = parts[1:]  # ['integrations', 'dedupe']
-                            imported_name = parts[-1]  # dedupe
-
-                            # Create vendor.sentry_sdk.integrations
-                            vendor_module = cst.Attribute(
-                                value=cst.Name("vendor"), attr=cst.Name(package_part)
-                            )
-                            for part in submodule_parts[
-                                :-1
-                            ]:  # All except the last part
-                                vendor_module = cst.Attribute(
-                                    value=vendor_module, attr=cst.Name(part)
-                                )
-
-                            statements_to_add.append(
-                                cst.ImportFrom(
-                                    module=vendor_module,
-                                    names=[
-                                        cst.ImportAlias(
-                                            name=cst.Name(imported_name),
-                                            asname=alias.asname,
-                                        )
-                                    ],
-                                    relative=[cst.Dot(), cst.Dot()],
-                                )
-                            )
-                        else:
-                            # Simple import like "import sentry_sdk"
-                            statements_to_add.append(
-                                cst.ImportFrom(
-                                    module=cst.Attribute(
-                                        value=cst.Name("vendor"),
-                                        attr=cst.Name(module_name),
-                                    ),
-                                    names=[
-                                        cst.ImportAlias(
-                                            name=cst.Name(module_name),
-                                            asname=alias.asname,
-                                        )
-                                    ],
-                                    relative=[cst.Dot(), cst.Dot()],
-                                )
-                            )
-                    else:
-                        # File is inside vendor directory
-                        current_package = self.current_file_path.parent.name
-                        package_name = module_name.split(".")[0]
-
-                        if package_name == current_package:
-                            # Importing from same package
-                            if "." in module_name:
-                                # Submodule import:
-                                # "import sentry_sdk.integrations.dedupe"
-                                # -> "from .integrations import dedupe"
-                                parts = module_name.split(".")
-                                submodule_parts = parts[
-                                    1:
-                                ]  # Everything after the package name
-                                imported_name = parts[-1]  # The final module name
-
-                                # Special handling for __init__.py files
-                                if self._is_package_init_file():
-                                    # In __init__.py files, transform same-package
-                                    # submodule imports
-                                    # to relative imports but also make
-                                    # the package name available
-                                    # e.g., "import pycountry.db" becomes:
-                                    # from . import db
-                                    # import sys
-                                    # pycountry = sys.modules[__name__]
-
-                                    # Import the submodule
-                                    statements_to_add.append(
-                                        cst.ImportFrom(
-                                            module=None,
-                                            names=[
-                                                cst.ImportAlias(
-                                                    name=cst.Name(imported_name),
-                                                    asname=None,
-                                                )
-                                            ],
-                                            relative=[cst.Dot()],
-                                        )
-                                    )
-
-                                    # Import sys if not already added
-                                    if not self._added_sys_import:
-                                        statements_to_add.append(
-                                            cst.Import(
-                                                names=[
-                                                    cst.ImportAlias(
-                                                        name=cst.Name("sys")
-                                                    )
-                                                ]
-                                            )
-                                        )
-                                        self._added_sys_import = True
-
-                                    # Make the package name available as a reference
-                                    # to the current module
-                                    # Only add this once per file
-                                    if not self._added_package_assignment:
-                                        package_assignment = cst.Assign(
-                                            targets=[
-                                                cst.AssignTarget(
-                                                    target=cst.Name(package_name)
-                                                )
-                                            ],
-                                            value=cst.Subscript(
-                                                value=cst.Attribute(
-                                                    value=cst.Name("sys"),
-                                                    attr=cst.Name("modules"),
-                                                ),
-                                                slice=[
-                                                    cst.SubscriptElement(
-                                                        slice=cst.Index(
-                                                            value=cst.Name("__name__")
-                                                        )
-                                                    )
-                                                ],
-                                            ),
-                                        )
-                                        statements_to_add.append(package_assignment)
-                                        self._added_package_assignment = True
-
-                                    self._log_transformation(
-                                        f"import {module_name}",
-                                        f"from . import {imported_name}; import sys; "
-                                        f"{package_name} = sys.modules[__name__]",
-                                        "SAME_PACKAGE_INIT_TRANSFORM",
-                                    )
-                                elif len(submodule_parts) == 1:
-                                    # Simple submodule: sentry_sdk.client
-                                    # -> from . import client
-                                    statements_to_add.append(
-                                        cst.ImportFrom(
-                                            module=None,
-                                            names=[
-                                                cst.ImportAlias(
-                                                    name=cst.Name(imported_name),
-                                                    asname=alias.asname,
-                                                )
-                                            ],
-                                            relative=[cst.Dot()],
-                                        )
-                                    )
-                                else:
-                                    # Nested submodule: sentry_sdk.integrations.dedupe
-                                    # -> from .integrations import dedupe
-                                    submodule_path = ".".join(submodule_parts[:-1])
-                                    statements_to_add.append(
-                                        cst.ImportFrom(
-                                            module=self._create_module_for_import_from(
-                                                submodule_path
-                                            ),
-                                            names=[
-                                                cst.ImportAlias(
-                                                    name=cst.Name(imported_name),
-                                                    asname=alias.asname,
-                                                )
-                                            ],
-                                            relative=[cst.Dot()],
-                                        )
-                                    )
-                            elif self._is_package_init_file():
-                                # In __init__.py, importing the package itself
-                                # doesn't make sense
-                                # and would create circular imports, so preserve as-is
-                                statements_to_add.append(stmt)
-                                self._log_transformation(
-                                    f"import {module_name}",
-                                    f"import {module_name} "
-                                    "(preserved - circular import avoided)",
-                                    "SAME_PACKAGE_INIT_CIRCULAR",
-                                )
-                            else:
-                                # Simple package import: "import sentry_sdk"
-                                # -> "from .. import sentry_sdk"
-                                dots = [cst.Dot()] * (level + 1)
-                                statements_to_add.append(
-                                    cst.ImportFrom(
-                                        module=None,
-                                        names=[
-                                            cst.ImportAlias(
-                                                name=cst.Name(package_name),
-                                                asname=alias.asname,
-                                            )
-                                        ],
-                                        relative=dots,
-                                    )
-                                )
-                        elif "." in module_name:
-                            # Importing from different package
-                            # Submodule import: "import requests.auth.basic"
-                            # -> "from ..requests.auth import basic"
-                            parts = module_name.split(".")
-                            package_name = parts[0]
-                            submodule_parts = parts[1:]
-                            imported_name = parts[-1]
-                            dots = [cst.Dot()] * (level + 1)
-
-                            if len(submodule_parts) == 1:
-                                # requests.auth -> from ..requests import auth
-                                statements_to_add.append(
-                                    cst.ImportFrom(
-                                        module=cst.Name(package_name),
-                                        names=[
-                                            cst.ImportAlias(
-                                                name=cst.Name(imported_name),
-                                                asname=alias.asname,
-                                            )
-                                        ],
-                                        relative=dots,
-                                    )
-                                )
-                            else:
-                                # requests.auth.basic ->
-                                # from ..requests.auth import basic
-                                submodule_path = ".".join(submodule_parts[:-1])
-                                module_node = cst.Attribute(
-                                    value=cst.Name(package_name),
-                                    attr=self._create_dotted_name(submodule_path),  # type: ignore
-                                )
-                                statements_to_add.append(
-                                    cst.ImportFrom(
-                                        module=module_node,
-                                        names=[
-                                            cst.ImportAlias(
-                                                name=cst.Name(imported_name),
-                                                asname=alias.asname,
-                                            )
-                                        ],
-                                        relative=dots,
-                                    )
-                                )
-                        else:
-                            # Simple package import: "import requests"
-                            # -> "from .. import requests"
-                            dots = [cst.Dot()] * (level + 1)
-                            statements_to_add.append(
-                                cst.ImportFrom(
-                                    module=None,
-                                    names=[
-                                        cst.ImportAlias(
-                                            name=cst.Name(module_name),
-                                            asname=alias.asname,
-                                        )
-                                    ],
-                                    relative=dots,
-                                )
-                            )
-
-                if statements_to_add:
-                    new_statements.extend(statements_to_add)
-
+                new_statements.extend(self._handle_import_statement(stmt))
             elif isinstance(stmt, cst.ImportFrom):
-                # Handle 'from package import x' statements
-                if stmt.module and not stmt.relative:  # Skip relative imports
-                    module_name = get_full_name_for_node(stmt.module)
-                    if module_name:
-                        package_name = module_name.split(".")[0]
-                        if package_name == "vendor" and len(module_name.split(".")) > 1:
-                            package_name = module_name.split(".")[1]
-
-                        if package_name in self.vendored_packages:
-                            level = self._get_relative_import_level()
-                            if level == 0:
-                                # File is outside vendor directory
-                                vendor_module = cst.Attribute(
-                                    value=cst.Name("vendor"),
-                                    attr=self._create_dotted_name(module_name),  # type: ignore
-                                )
-                                new_statements.append(
-                                    cst.ImportFrom(
-                                        module=vendor_module,
-                                        names=self._clean_import_names(stmt.names),
-                                        relative=[cst.Dot(), cst.Dot()],
-                                    )
-                                )
-                            else:
-                                # File is inside vendor directory
-                                current_package = self.current_file_path.parent.name
-                                if package_name == current_package:
-                                    # Importing from same package
-                                    if module_name == package_name:
-                                        # Direct import: "from sentry_sdk import Hub"
-                                        # -> "from . import Hub"
-                                        new_statements.append(
-                                            cst.ImportFrom(
-                                                module=None,
-                                                names=self._clean_import_names(
-                                                    stmt.names
-                                                ),
-                                                relative=[cst.Dot()],
-                                            )
-                                        )
-                                    else:
-                                        # Submodule import:
-                                        # "from sentry_sdk.integrations.dedupe import
-                                        # something"
-                                        # -> "from .integrations.dedupe import
-                                        # something"
-                                        submodule = module_name[len(package_name) + 1 :]
-                                        new_statements.append(
-                                            cst.ImportFrom(
-                                                module=self._create_module_for_import_from(
-                                                    submodule
-                                                ),
-                                                names=self._clean_import_names(
-                                                    stmt.names
-                                                ),
-                                                relative=[cst.Dot()],
-                                            )
-                                        )
-                                else:
-                                    # Importing from different package
-                                    dots = [cst.Dot()] * (level + 1)
-                                    new_statements.append(
-                                        cst.ImportFrom(
-                                            module=self._create_module_for_import_from(
-                                                module_name
-                                            ),
-                                            names=self._clean_import_names(stmt.names),
-                                            relative=dots,
-                                        )
-                                    )
-                        else:
-                            new_statements.append(stmt)
-                    else:
-                        new_statements.append(stmt)
-                else:
-                    new_statements.append(stmt)
+                new_statements.extend(self._handle_importfrom_statement(stmt))
             else:
                 new_statements.append(stmt)
 
@@ -568,77 +525,71 @@ def rewrite_imports_with_libcst(
     file_path: Path, vendored_packages: set[str], vendor_path: Path
 ) -> None:
     """Rewrite imports in a single Python file using LibCST."""
-    try:
-        with open(file_path, encoding="utf-8") as f:
-            source_code = f.read()
+    # try:
+    with open(file_path, encoding="utf-8") as f:
+        source_code = f.read()
 
-        import_logger.info(f"PROCESSING FILE: {file_path}")
+    import_logger.info(f"PROCESSING FILE: {file_path}")
 
-        # Log all import statements found in the file
-        import_lines = [
-            line.strip()
-            for line in source_code.split("\n")
-            if line.strip().startswith(("import ", "from "))
-        ]
-        if import_lines:
-            import_logger.info(f"FOUND {len(import_lines)} IMPORT STATEMENTS:")
-            for import_line in import_lines:
-                import_logger.info(f"  {import_line}")
-        else:
-            import_logger.info("NO IMPORT STATEMENTS FOUND")
+    # Log all import statements found in the file
+    import_lines = [
+        line.strip()
+        for line in source_code.split("\n")
+        if line.strip().startswith(("import ", "from "))
+    ]
+    if import_lines:
+        import_logger.info(f"FOUND {len(import_lines)} IMPORT STATEMENTS:")
+        for import_line in import_lines:
+            import_logger.info(f"  {import_line}")
+    else:
+        import_logger.info("NO IMPORT STATEMENTS FOUND")
 
-        # Parse the code with LibCST
-        tree = cst.parse_module(source_code)
+    # Parse the code with LibCST
+    tree = cst.parse_module(source_code)
 
-        # Transform the tree
-        transformer = LibCSTImportTransformer(vendored_packages, file_path, vendor_path)
-        new_tree = tree.visit(transformer)
+    # Transform the tree
+    transformer = LibCSTImportTransformer(vendored_packages, file_path, vendor_path)
+    new_tree = tree.visit(transformer)
 
-        # Generate new code
-        new_code = new_tree.code
+    # Generate new code
+    new_code = new_tree.code
 
-        # Force pure-Python Protobuf backend to avoid conflicts with Anki's version
-        if file_path.name == "api_implementation.py" and any(
-            p.name == "protobuf" for p in file_path.parents
-        ):
-            new_code = new_code.replace(
-                "_implementation_type = None", "_implementation_type = 'python'"
-            )
-
-        vendor_hooks = get_vendor_hooks()
-        if vendor_hooks and hasattr(vendor_hooks, "transform_code"):
-            import_logger.info(f"Transforming code with vendor hooks: {file_path}")
-            new_code = vendor_hooks.transform_code(file_path, new_code)
-
-        # Only write if content changed
-        if new_code != source_code:
-            import_logger.info(f"CHANGES DETECTED in {file_path}")
-
-            # Log the diff for debugging
-            diff_lines = list(
-                difflib.unified_diff(
-                    source_code.splitlines(keepends=True),
-                    new_code.splitlines(keepends=True),
-                    fromfile=f"original/{file_path.name}",
-                    tofile=f"modified/{file_path.name}",
-                    lineterm="",
-                )
-            )
-
-            import_logger.info("DIFF:")
-            for line in diff_lines:
-                import_logger.info(line.rstrip())
-
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(new_code)
-        else:
-            import_logger.info(f"NO CHANGES NEEDED in {file_path}")
-
-    except Exception as e:
-        import_logger.exception(f"ERROR processing {file_path}")
-        print(
-            f"Warning: Could not rewrite imports in {file_path}: {e}", file=sys.stderr
+    # Force pure-Python Protobuf backend to avoid conflicts with Anki's version
+    if file_path.name == "api_implementation.py" and any(
+        p.name == "protobuf" for p in file_path.parents
+    ):
+        new_code = new_code.replace(
+            "_implementation_type = None", "_implementation_type = 'python'"
         )
+
+    vendor_hooks = get_vendor_hooks()
+    if vendor_hooks and hasattr(vendor_hooks, "transform_code"):
+        import_logger.info(f"Transforming code with vendor hooks: {file_path}")
+        new_code = vendor_hooks.transform_code(file_path, new_code)
+
+    # Only write if content changed
+    if new_code != source_code:
+        import_logger.info(f"CHANGES DETECTED in {file_path}")
+
+        # Log the diff for debugging
+        diff_lines = list(
+            difflib.unified_diff(
+                source_code.splitlines(keepends=True),
+                new_code.splitlines(keepends=True),
+                fromfile=f"original/{file_path.name}",
+                tofile=f"modified/{file_path.name}",
+                lineterm="",
+            )
+        )
+
+        import_logger.info("DIFF:")
+        for line in diff_lines:
+            import_logger.info(line.rstrip())
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(new_code)
+    else:
+        import_logger.info(f"NO CHANGES NEEDED in {file_path}")
 
 
 def rewrite_imports_in_vendor_dir(
