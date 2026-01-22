@@ -93,7 +93,7 @@ readme_path = addon_root / "README.md"
 readme = readme_path.read_text(encoding="utf-8")
 readme = re.sub(
     r".*?\[BEGINNING OF TEMPLATE\]",
-    f"# {args.name}\n\nTODO",
+    f"# {args.name}",
     readme,
     flags=re.MULTILINE | re.DOTALL,
 )
