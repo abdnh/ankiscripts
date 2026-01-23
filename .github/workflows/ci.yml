@@ -30,5 +30,8 @@ jobs:
             - name: Run checks
               run: uv run -- pre-commit run --all-files
 
+            - name: Install just
+              uses: extractions/setup-just@v3
+
             - name: Run tests
-              run: make test
+              run: just test
