@@ -116,7 +116,7 @@ symlink_addon(addon_root, args.package)
 
 # Set up virtual environment and install dependencies
 uv("sync")
-uv("run", "--", "pre-commit", "install")
+uv("run", "--", "prek", "install", "--install-hooks")
 vendor.install_libs()
 
 # Copy VS Code settings
