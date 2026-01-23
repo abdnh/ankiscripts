@@ -138,3 +138,10 @@ if book_toml_path.exists():
             "ADDON_NAME", args.package.upper()
         )
     )
+
+# Update package name in package.json
+package_json_path = addon_root / "ts" / "package.json"
+if package_json_path.exists():
+    package_json_path.write_text(
+        package_json_path.read_text(encoding="utf-8").replace("my_addon", args.package)
+    )
