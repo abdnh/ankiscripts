@@ -120,6 +120,21 @@ uv("run", "--", "prek", "install", "--install-hooks")
 vendor.install_libs()
 
 # Copy VS Code settings
-vsode_dist = addon_root / ".vscode.dist"
+vscode_dist = addon_root / ".vscode.dist"
+launch_config_path = vscode_dist / "launch.json"
+launch_config_path.write_text(
+    launch_config_path.read_text(encoding="utf-8").replace(
+        "ADDON_NAME", args.package.upper()
+    )
+)
 vscode_path = addon_root / ".vscode"
-shutil.copytree(vsode_dist, vscode_path)
+shutil.copytree(vscode_dist, vscode_path)
+
+# Update book title
+book_toml_path = addon_root / "docs" / "book.toml"
+if book_toml_path.exists():
+    book_toml_path.write_text(
+        book_toml_path.read_text(encoding="utf-8").replace(
+            "ADDON_NAME", args.package.upper()
+        )
+    )
