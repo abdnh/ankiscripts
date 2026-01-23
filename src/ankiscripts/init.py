@@ -77,6 +77,12 @@ if args.homepage:
     addon_meta["homepage"] = args.homepage
 if args.min_point_version:
     addon_meta["min_point_version"] = args.min_point_version
+support_channels = {}
+if args.github:
+    support_channels["github"] = args.github
+if args.forums:
+    support_channels["forums"] = args.forums
+addon_meta["support_channels"] = support_channels
 write_addon_json(addon_root, addon_meta)
 
 # pyproject.toml
