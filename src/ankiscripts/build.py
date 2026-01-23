@@ -13,9 +13,8 @@ from typing import Any
 
 import jsonschema
 
+from . import protobuf
 from ._utils import read_addon_json, run_npm, run_script
-from .protobuf import ProtobufGenerator
-from .rewrite_imports import rewrite_imports_in_vendor_dir
 
 
 def with_fixes_for_qt6(code: str) -> str:
@@ -325,12 +324,7 @@ class Builder:
                 run_npm("run", "bundle_ts", path.name, cwd=ts_dir)
 
     def _build_proto(self) -> None:
-        proto_dir = (self.root_dir / "proto").absolute()
-        if not proto_dir.exists():
-            return
-        generator = ProtobufGenerator(self.root_dir, self.src_dir)
-        generator.generate()
-        rewrite_imports_in_vendor_dir(self.src_dir / "vendor", self.src_dir / "proto")
+        protobuf.build(self.root_dir, self.src_dir)
 
     def _run_custom_build_script(self) -> None:
         # Additional build logic can be specified in scripts/build.(sh|ps1)

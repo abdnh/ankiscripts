@@ -7,6 +7,7 @@ from google.protobuf import descriptor_pb2, descriptor_pool
 from google.protobuf.descriptor import MethodDescriptor, ServiceDescriptor
 
 from ._utils import run_protoc, run_protol
+from .rewrite_imports import rewrite_imports_in_vendor_dir
 
 
 class ServiceMethod:
@@ -241,3 +242,18 @@ class ProtobufGenerator:
         self.generate_python_services()
         self.generate_flask_routes()
         self.generate_ts_definitions()
+
+
+def build(root_dir: Path, src_dir: Path) -> None:
+    proto_dir = (root_dir / "proto").absolute()
+    if not proto_dir.exists():
+        return
+    generator = ProtobufGenerator(root_dir, src_dir)
+    generator.generate()
+    rewrite_imports_in_vendor_dir(src_dir / "vendor", src_dir / "proto")
+
+
+if __name__ == "__main__":
+    root_dir = Path.cwd()
+    src_dir = root_dir / "src"
+    build(root_dir, src_dir)
