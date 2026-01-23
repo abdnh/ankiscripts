@@ -10,6 +10,15 @@ from pathlib import Path
 from . import support, vendor
 from ._utils import read_addon_json, symlink_addon, uv, write_addon_json
 
+
+def replace_in_path(path: Path, old: str, new: str) -> None:
+    if not path.exists():
+        return
+    encoding = "utf-8"
+    text = path.read_text(encoding=encoding).replace(old, new)
+    path.write_text(text, encoding=encoding)
+
+
 addon_root = Path(".")
 
 parser = argparse.ArgumentParser()
@@ -85,14 +94,7 @@ if args.forums:
 addon_meta["support_channels"] = support_channels
 write_addon_json(addon_root, addon_meta)
 
-# pyproject.toml
-pyproject_toml_path = addon_root / "pyproject.toml"
-if pyproject_toml_path.exists():
-    pyproject_toml = pyproject_toml_path.read_text(encoding="utf-8").replace(
-        "anki_addon_template", args.package
-    )
-    pyproject_toml_path.write_text(pyproject_toml, encoding="utf-8")
-
+replace_in_path(addon_root / "pyproject.toml", "anki_addon_template", args.package)
 
 # Readme
 readme_path = addon_root / "README.md"
@@ -122,26 +124,12 @@ vendor.install_libs()
 # Copy VS Code settings
 vscode_dist = addon_root / ".vscode.dist"
 launch_config_path = vscode_dist / "launch.json"
-launch_config_path.write_text(
-    launch_config_path.read_text(encoding="utf-8").replace(
-        "ADDON_NAME", args.package.upper()
-    )
-)
+replace_in_path(vscode_dist / "launch.json", "ADDON_NAME", args.package.upper())
 vscode_path = addon_root / ".vscode"
 shutil.copytree(vscode_dist, vscode_path)
 
 # Update book title
-book_toml_path = addon_root / "docs" / "book.toml"
-if book_toml_path.exists():
-    book_toml_path.write_text(
-        book_toml_path.read_text(encoding="utf-8").replace(
-            "ADDON_NAME", args.package.upper()
-        )
-    )
+replace_in_path(addon_root / "docs" / "book.toml", "ADDON_NAME", args.package.upper())
 
 # Update package name in package.json
-package_json_path = addon_root / "ts" / "package.json"
-if package_json_path.exists():
-    package_json_path.write_text(
-        package_json_path.read_text(encoding="utf-8").replace("my_addon", args.package)
-    )
+replace_in_path(addon_root / "ts" / "package.json", "my_addon", args.package)
