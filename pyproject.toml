@@ -37,13 +37,13 @@ restart-anki = ["pyinstaller", "psutil", "send2trash", "types-psutil", "types-Se
 dev = [
     "aqt",
     "mypy",
-    "pre-commit",
     "pytest",
     "pytest-cov",
     "ruff",
     "types-psutil",
     "types-Send2Trash",
     "types-protobuf",
+    "prek>=0.3.0",
 ]
 
 [tool.uv.sources]
