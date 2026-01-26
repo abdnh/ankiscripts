@@ -28,7 +28,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     addon_root = Path(args.destination)
-    copier.run_copy(
+    worker = copier.run_copy(
         "https://github.com/abdnh/anki-addon-template",
         data=None,
         vcs_ref="HEAD",
@@ -40,8 +40,7 @@ def main() -> None:
     vendor.install_libs()
 
     shutil.copytree(addon_root / ".vscode.dist", addon_root / ".vscode")
-
-    symlink_addon(addon_root, args.package)
+    symlink_addon(addon_root, worker.answers.user["package_name"])
 
 
 if __name__ == "__main__":
