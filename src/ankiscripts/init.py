@@ -29,7 +29,10 @@ def main() -> None:
     args = parser.parse_args()
     addon_root = Path(args.destination)
     copier.run_copy(
-        "https://github.com/abdnh/anki-addon-template", data=None, unsafe=True
+        "https://github.com/abdnh/anki-addon-template",
+        data=None,
+        vcs_ref="HEAD",
+        unsafe=True,
     )
 
     uv("sync", "--dev")
