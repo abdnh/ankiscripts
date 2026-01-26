@@ -18,6 +18,7 @@ def main() -> None:
         vcs_ref="HEAD",
         unsafe=True,
         skip_answered=True,
+        overwrite=True,
     )
 
 
