@@ -33,6 +33,7 @@ def main() -> None:
         data=None,
         vcs_ref="HEAD",
         unsafe=True,
+        dst_path=addon_root,
     )
 
     uv("sync", "--dev")
