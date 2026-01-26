@@ -31,6 +31,7 @@ qt5 = ["pyqt5"]
 qt6 = ["pyqt6"]
 forms = ["pyqt6"]
 restart-anki = ["pyinstaller", "psutil", "send2trash", "types-psutil", "types-Send2Trash"]
+template = ["copier", "anki_addon_template"]
 
 [dependency-groups]
 dev = [
@@ -47,11 +48,13 @@ dev = [
 
 [tool.uv.sources]
 protoletariat = { git = "https://github.com/abdnh/protoletariat", branch = "anki" }
+anki_addon_template = { git = "https://github.com/abdnh/anki-addon-template", branch = "main" }
 
 [project.scripts]
 build_anki_addon = "ankiscripts.build:main"
 run_anki_addon = "ankiscripts.run:main"
 update_anki_addon = "ankiscripts.update:main"
+init_anki_addon = "ankiscripts.init:main"
 
 [project.urls]
 Repository = "https://github.com/abdnh/ankiscripts"
