@@ -17,9 +17,6 @@ from ._utils import (
 )
 from .rewrite_imports import rewrite_imports_in_vendor_dir
 
-addon_root = Path.cwd()
-scripts_dir = addon_root / "scripts"
-
 
 @dataclass
 class BuildPlatform:
@@ -80,7 +77,13 @@ def remove_excluded_paths(vendor_path: Path, exclude: list[str] | None = None) -
                 path.unlink()
 
 
-def install_libs(exclude: list[str] | None = None) -> None:
+def install_libs(
+    exclude: list[str] | None = None, addon_root: Path | None = None
+) -> None:
+    if not addon_root:
+        addon_root = Path.cwd()
+    scripts_dir = addon_root / "scripts"
+
     python_exe = shutil.which("python")
     assert python_exe is not None
 
