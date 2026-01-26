@@ -65,3 +65,8 @@ ignore = ["PLW0603", "PLR2004"]
 
 [tool.ruff.lint.pylint]
 max-args = 7
+
+[[tool.mypy.overrides]]
+module = "copier.*"
+ignore_missing_imports = true
+ignore_errors = true
