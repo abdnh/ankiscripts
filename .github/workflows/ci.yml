@@ -28,7 +28,7 @@ jobs:
               run: .github/workflows/install_deps.sh
 
             - name: Run checks
-              run: uv run -- prek run --all-files
+              run: uv run --extra template -- prek run --all-files
 
             - name: Install just
               uses: extractions/setup-just@v3
