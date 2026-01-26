@@ -44,8 +44,9 @@ def main() -> None:
     uv("sync", "--dev", cwd=addon_root)
     uv("run", "--", "prek", "install", "--install-hooks", cwd=addon_root)
     vendor.install_libs(addon_root=addon_root)
-
-    shutil.copytree(addon_root / ".vscode.dist", addon_root / ".vscode")
+    shutil.copytree(
+        addon_root / ".vscode.dist", addon_root / ".vscode", dirs_exist_ok=True
+    )
     symlink_addon(addon_root, worker.answers.user["package_name"])
 
 
