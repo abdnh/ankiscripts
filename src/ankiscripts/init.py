@@ -26,10 +26,15 @@ def main() -> None:
     parser.add_argument(
         "--destination", help="folder to initialize add-on in", default="."
     )
+    parser.add_argument(
+        "--source",
+        help="source URL/folder to copy template from",
+        default="https://github.com/abdnh/anki-addon-template",
+    )
     args = parser.parse_args()
     addon_root = Path(args.destination)
     worker = copier.run_copy(
-        "https://github.com/abdnh/anki-addon-template",
+        args.source,
         data=None,
         vcs_ref="HEAD",
         unsafe=True,
