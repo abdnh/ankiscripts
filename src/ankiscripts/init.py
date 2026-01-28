@@ -10,7 +10,7 @@ from pathlib import Path
 import copier
 
 from . import vendor
-from ._utils import symlink_addon, uv
+from ._utils import run_git, symlink_addon, uv
 
 
 def replace_in_path(path: Path, old: str, new: str) -> None:
@@ -45,6 +45,7 @@ def main() -> None:
     os.environ.pop("VIRTUAL_ENV", None)
 
     uv("sync", "--dev", cwd=addon_root)
+    run_git("init", cwd=addon_root)
     uv(
         "run",
         "--",

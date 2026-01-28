@@ -156,6 +156,10 @@ def run_script(scripts_dir: Path, name: str) -> int:
     return 0
 
 
+def run_git(*args: Any, **kwargs: Any) -> int:
+    return subprocess.check_call([shutil.which("git"), *args], **kwargs)
+
+
 MAX_ANKI_VERSION = 999999
 
 
