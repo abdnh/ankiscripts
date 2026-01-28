@@ -3,6 +3,7 @@ Initializes a new add-on using my add-on template.
 """
 
 import argparse
+import os
 import shutil
 from pathlib import Path
 
@@ -40,6 +41,8 @@ def main() -> None:
         unsafe=True,
         dst_path=addon_root,
     )
+    # Silence uv warning if another venv is active
+    os.environ.pop("VIRTUAL_ENV", None)
 
     uv("sync", "--dev", cwd=addon_root)
     uv(
