@@ -109,7 +109,7 @@ class Builder:
         )
         parser.add_argument(
             "--build-restart-script",
-            help="Build the restart_anki.py script "
+            help="Build the restart_anki script "
             "to the bin/restart_anki subdirectory."
             " Used to work around Windows permission issues when updating add-on "
             "that rely on some modules (see the abdnh/ankiutils project).",

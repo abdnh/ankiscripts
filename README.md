@@ -38,10 +38,6 @@ This creates a sources zip using git-archive and git-bundle.
 
 Prints relevant changes from CHANGELOG.md given a version string. Used for GitHub release descriptions.
 
-### [restart_anki.py](src/ankiscripts/restart_anki.py)
-
-This script is intended for usage with [ankiutils](https://github.com/abdnh/ankiutils) to work around Windows permission issues while updating add-ons that depend on C extension modules.
-
 ### [restart_anki.c](src/ankiscripts/restart_anki.c)
 
-This is a small C implementation of [restart_anki.py](src/ankiscripts/restart_anki.py). Used by default by the build script.
+This C script is intended for usage with [ankiutils](https://github.com/abdnh/ankiutils) to work around Windows permission issues while updating add-ons that depend on C extension modules.

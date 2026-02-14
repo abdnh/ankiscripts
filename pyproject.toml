@@ -30,7 +30,6 @@ dependencies = [
 qt5 = ["pyqt5"]
 qt6 = ["pyqt6"]
 forms = ["pyqt6"]
-restart-anki = ["pyinstaller", "psutil", "send2trash", "types-psutil", "types-Send2Trash"]
 template = ["copier", "anki_addon_template"]
 
 [dependency-groups]
