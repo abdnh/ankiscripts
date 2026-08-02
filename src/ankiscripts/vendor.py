@@ -94,6 +94,7 @@ def install_libs(
     vendor_path.mkdir(exist_ok=True)
     shutil.rmtree(vendor_path)
     pip_install(
+        root_dir=addon_root,
         target=vendor_path,
         python_version=".".join(str(p) for p in min(python_versions)),
     )
@@ -116,6 +117,7 @@ def install_libs(
             )
             install_dir = build_dir / f"{dotless_python_version}_{platform.name}_venv"
             pip_install(
+                root_dir=addon_root,
                 target=install_dir,
                 python_version=f"{dot_python_version}",
                 platform=platform.name,

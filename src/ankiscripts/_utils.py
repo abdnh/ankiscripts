@@ -37,7 +37,8 @@ def uv(*args: Any, **kwargs: Any) -> int:
 
 
 def pip_install(
-    target: Path | str | None = None,
+    root_dir: Path,
+    target: Path | None = None,
     python_version: str = "3.8",
     platform: str | None = None,
     env: dict[str, str] | None = None,
@@ -45,10 +46,10 @@ def pip_install(
 ) -> None:
     extra_args = []
     if target:
-        extra_args.extend(["--target", str(target)])
+        extra_args.extend(["--target", str(target.relative_to(root_dir))])
     if platform:
         extra_args.extend(["--python-platform", platform])
-    kwargs = {}
+    kwargs: dict[str, Any] = {"cwd": root_dir}
     if env:
         kwargs["env"] = {**os.environ, **env}
     uv(
