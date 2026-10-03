@@ -181,7 +181,7 @@ def get_supported_python_versions(
         versions.append((3, 7))
     if min_anki_point < 50:
         versions.append((3, 8))
-    if max_anki_point >= 50:
+    if max_anki_point >= 50 and min_anki_point < 260500:
         versions.append((3, 9))
     if max_anki_point >= 250700:
         versions.append((3, 13))
