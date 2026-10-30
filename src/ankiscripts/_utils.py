@@ -79,7 +79,7 @@ def symlink_addon(addon_root: Path, addon_package: str) -> None:
                 check=True,
             )
         else:
-            os.link(src_path, install_path)
+            os.symlink(src_path, install_path)
 
 
 def run_bash_script(path: Path) -> int:
