@@ -11,6 +11,8 @@ from typing import Any
 
 import tomli
 
+from .exceptions import NoCCompilerException
+
 
 def read_addon_json(root_dir: Path) -> dict[str, Any]:
     try:
@@ -205,3 +207,24 @@ def read_dependency_version(addon_root: Path, package: str) -> tuple[int, ...] |
     if not match:
         return None
     return tuple(int(p) for p in match.group(1).split("."))
+
+
+def _get_available_c_compiler() -> str | None:
+    for cc in (os.environ.get("CC"), "x86_64-w64-mingw32-gcc", "clang"):
+        if cc:
+            if path := shutil.which(cc):
+                return path
+    return None
+
+
+def compile_c_win(*args: Any, **kwargs: Any) -> str:
+    """
+    Run available C compiler for restart_anki.c on Windows
+    with given arguments and return stdout.
+    Uses the `CC` environment variable and fall back to
+    `x86_64-w64-mingw32-gcc` or `clang` if not available.
+    """
+    cc = _get_available_c_compiler()
+    if not cc:
+        raise NoCCompilerException()
+    return subprocess.check_output([_get_available_c_compiler(), *args], **kwargs)

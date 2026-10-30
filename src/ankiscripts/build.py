@@ -14,7 +14,7 @@ from typing import Any
 import jsonschema
 
 from . import protobuf
-from ._utils import read_addon_json, run_npm, run_script
+from ._utils import compile_c_win, read_addon_json, run_npm, run_script
 
 
 def with_fixes_for_qt6(code: str) -> str:
@@ -339,18 +339,15 @@ class Builder:
         bin_dir.mkdir(exist_ok=True)
         c_source = Path(__file__).parent / "restart_anki.c"
         exe_output = bin_dir / "restart_anki.exe"
-        subprocess.check_output(
-            [
-                os.environ.get("CC", "clang"),
-                "-O2",
-                "-Wall",
-                "-Wextra",
-                "-o",
-                str(exe_output),
-                str(c_source),
-                "-lshell32",
-                "-ladvapi32",
-            ]
+        compile_c_win(
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-o",
+            str(exe_output),
+            str(c_source),
+            "-lshell32",
+            "-ladvapi32",
         )
 
     def build(self) -> None:
